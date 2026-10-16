@@ -45,11 +45,7 @@ fun CartSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "Keranjang",
-                style = MaterialTheme.typography.titleSmall,
-                fontFamily = FontFamily.Monospace,
-            )
+            MicroLabel(if (cart.isEmpty()) "Keranjang" else "Keranjang • ${cart.values.sumOf { it.qty }} cup")
             if (cart.isNotEmpty()) {
                 TextButton(onClick = { confirmClear = true }) { Text("Kosongkan") }
             }
@@ -59,7 +55,7 @@ fun CartSection(
                 text = "Ketuk kartu menu untuk menambah.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 8.dp),
+                modifier = Modifier.padding(vertical = 12.dp),
             )
         } else {
             cart.values.forEach { line ->

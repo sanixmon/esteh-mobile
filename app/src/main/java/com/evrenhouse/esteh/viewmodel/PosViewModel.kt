@@ -28,13 +28,17 @@ data class CartLine(val menuId: String, val name: String, val price: Int, val qt
     val subtotal: Int get() = price * qty
 }
 
-data class MenuDef(val menuId: String, val name: String)
+data class MenuDef(val menuId: String, val name: String, val asset: String)
 
-/** Katalog 2 menu, harga dari settings (android.md §2.1). */
+/** Katalog 2 menu, harga dari settings, foto dari web (§2.1). */
 fun menuCatalog(prices: Settings): List<Pair<MenuDef, Int>> = listOf(
-    MenuDef("es-teh", "Es Teh") to prices.esTeh,
-    MenuDef("lemon-tea", "Lemon Tea") to prices.lemonTea,
+    MenuDef("es-teh", "Es Teh", "es-teh.svg") to prices.esTeh,
+    MenuDef("lemon-tea", "Lemon Tea", "lemon-tea.svg") to prices.lemonTea,
 )
+
+/** URL absolut aset web: API_BASE_URL + /assets/<file>. */
+fun assetUrl(baseUrl: String, asset: String): String =
+    baseUrl.trimEnd('/') + "/assets/" + asset.trimStart('/')
 
 enum class Sheet { NONE, RECAP, SETTINGS, RECEIPT }
 enum class RecapFilter { ALL, CASH, QRIS }
@@ -163,18 +167,34 @@ class PosViewModel(
             )
             when (val r = pos.checkout(tx)) {
                 is CheckoutResult.Synced -> _state.update {
-                    it.copy(
-                        isCompleting = false, receipt = r.transaction,
-                        sheet = if (it.showReceipt) Sheet.RECEIPT else Sheet.NONE,
-                        offline = false,
-                    )
+                    if (it.showReceipt) {
+                        it.copy(
+                            isCompleting = false, receipt = r.transaction,
+                            sheet = Sheet.RECEIPT, offline = false,
+                        )
+                    } else {
+                        // Struk mati: langsung reset + kabari, tanpa sheet.
+                        it.copy(
+                            isCompleting = false, cart = emptyMap(), receipt = null,
+                            sheet = Sheet.NONE, offline = false,
+                            snackbar = "Transaksi ${r.transaction.id} tersimpan",
+                        )
+                    }
                 }
                 is CheckoutResult.SavedOffline -> _state.update {
-                    it.copy(
-                        isCompleting = false, receipt = r.transaction,
-                        sheet = if (it.showReceipt) Sheet.RECEIPT else Sheet.NONE,
-                        offline = true, snackbar = "Offline — tersimpan lokal",
-                    )
+                    if (it.showReceipt) {
+                        it.copy(
+                            isCompleting = false, receipt = r.transaction,
+                            sheet = Sheet.RECEIPT, offline = true,
+                            snackbar = "Offline — tersimpan lokal",
+                        )
+                    } else {
+                        it.copy(
+                            isCompleting = false, cart = emptyMap(), receipt = null,
+                            sheet = Sheet.NONE, offline = true,
+                            snackbar = "Offline — tersimpan lokal",
+                        )
+                    }
                 }
             }
             pos.getSummary().onSuccess { sum -> _state.update { it.copy(summary = sum) } }

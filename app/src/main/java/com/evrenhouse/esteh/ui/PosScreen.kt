@@ -1,6 +1,8 @@
 package com.evrenhouse.esteh.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,23 +14,24 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,13 +41,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.evrenhouse.esteh.BuildConfig
+import com.evrenhouse.esteh.ui.theme.LocalEstehExtraColors
 import com.evrenhouse.esteh.viewmodel.ClockViewModel
 import com.evrenhouse.esteh.viewmodel.PosViewModel
 import com.evrenhouse.esteh.viewmodel.Sheet
+import com.evrenhouse.esteh.viewmodel.assetUrl
 import com.evrenhouse.esteh.viewmodel.menuCatalog
 
 /**
@@ -67,20 +76,8 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
         }
     }
 
-    // Struk opsional: hanya reset diam-diam bila struk dimatikan.
-    val receipt = state.receipt
-    val offline = state.offline
-    val showReceipt = state.showReceipt
-    LaunchedEffect(receipt, offline, showReceipt) {
-        if (receipt != null && (state.sheet != Sheet.RECEIPT || !showReceipt)) {
-            if (!offline) snack.showSnackbar("Transaksi ${receipt.id} tersimpan")
-            vm.newTransaction()
-        }
-    }
-
     Scaffold(
-        snackbarHost = { SnackbarHost(snack) },
-        bottomBar = {},
+        snackbarHost = { EstehSnackbar(snack) },
     ) { inner ->
         BoxWithConstraints(
             modifier = Modifier.fillMaxSize().padding(inner),
@@ -233,25 +230,22 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
 @Composable
 private fun Header(vm: PosViewModel, clockVm: ClockViewModel, modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val extras = MaterialTheme.colorScheme // akses via LocalEstehExtraColors di bawah
     Column(modifier = modifier.padding(vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = "Es Teh Evren", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    text = "Es Teh Evren",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
                 ClockOf(clockVm)
             }
             if (state.offline) {
-                Text(
-                    text = "Offline — tersimpan lokal",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+                OfflinePill()
             }
-            IconButton(onClick = vm::refreshAll) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Muat ulang")
-            }
-            IconButton(onClick = vm::openRecap) {
-                Text("Rekap", style = MaterialTheme.typography.labelLarge)
-            }
+            TextButton(onClick = vm::refreshAll) { Text("Muat ulang") }
+            TextButton(onClick = vm::openRecap) { Text("Rekap") }
             IconButton(onClick = vm::openSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = "Pengaturan")
             }
@@ -260,11 +254,33 @@ private fun Header(vm: PosViewModel, clockVm: ClockViewModel, modifier: Modifier
 }
 
 @Composable
+private fun OfflinePill() {
+    val extra = LocalEstehExtraColors.current
+    Box(
+        modifier = Modifier.clip(CircleShape).background(extra.warnContainer)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Text(
+            text = "OFFLINE",
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            color = extra.onWarnContainer,
+        )
+    }
+}
+
+@Composable
 private fun MenuPane(vm: PosViewModel, modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        MicroLabel("Katalog")
         menuCatalog(state.prices).forEach { (def, price) ->
-            MenuCard(name = def.name, price = price, onTap = { vm.addItem(def.menuId) })
+            MenuCard(
+                name = def.name,
+                price = price,
+                imageUrl = assetUrl(BuildConfig.API_BASE_URL, def.asset),
+                onTap = { vm.addItem(def.menuId) },
+            )
         }
         Spacer(modifier = Modifier.height(4.dp))
     }
@@ -300,12 +316,23 @@ private fun BottomBar(qty: Int, total: Int, onOpen: () -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = if (qty == 0) "Rp 0" else "$qty item • ${total.toRp()}",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
-            Button(onClick = onOpen, enabled = qty > 0) { Text("Lihat & Bayar") }
+            Column(modifier = Modifier.weight(1f)) {
+                MicroLabel(if (qty == 0) "Keranjang kosong" else "$qty item")
+                Text(
+                    text = total.toRp(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Button(
+                onClick = onOpen,
+                enabled = qty > 0,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+            ) { Text("Lihat & Bayar") }
         }
     }
 }

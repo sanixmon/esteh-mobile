@@ -70,7 +70,7 @@ fun SettingsDialog(
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(text = "Struk", style = MaterialTheme.typography.titleSmall)
+                MicroLabel("Struk")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,

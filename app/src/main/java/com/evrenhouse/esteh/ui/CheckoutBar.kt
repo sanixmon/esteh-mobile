@@ -1,19 +1,22 @@
 package com.evrenhouse.esteh.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.evrenhouse.esteh.data.remote.dto.Transaction
 
@@ -21,6 +24,7 @@ import com.evrenhouse.esteh.data.remote.dto.Transaction
  * Area pembayaran + CTA total. Tinggi visual dikunci agar CTA tak loncat (§4).
  * CTA hanya angka total, disabled sampai item + metode terisi (§2.5).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CheckoutBar(
     payment: String?,
@@ -32,46 +36,47 @@ fun CheckoutBar(
     onCheckout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val options = listOf("Cash" to Transaction.CASH, "QRIS" to Transaction.QRIS)
     Column(modifier = modifier.fillMaxWidth().padding(16.dp)) {
+        MicroLabel("Metode pembayaran")
+        Spacer(modifier = Modifier.height(6.dp))
         // Area dinamis dikunci 76dp agar CTA tak loncat saat ganti metode (§4).
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().height(76.dp),
-        ) {
-            PaymentChip("Cash", Transaction.CASH, payment, onPayment)
-            PaymentChip("QRIS", Transaction.QRIS, payment, onPayment)
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().height(76.dp)) {
+            options.forEachIndexed { i, (label, value) ->
+                SegmentedButton(
+                    selected = payment == value,
+                    onClick = { onPayment(value) },
+                    shape = SegmentedButtonDefaults.itemShape(i, options.size),
+                    label = { Text(label) },
+                )
+            }
         }
+        Spacer(modifier = Modifier.height(8.dp))
         Button(
             onClick = onCheckout,
             enabled = canCheckout,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
             ),
+            shape = MaterialTheme.shapes.medium,
         ) {
             Text(
-                text = if (isCompleting) "Memproses…" else totalAmount.toRp(),
-                style = MaterialTheme.typography.titleLarge,
+                text = if (isCompleting) "MEMPROSES…" else totalAmount.toRp(),
+                style = MaterialTheme.typography.headlineSmall,
                 fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
             )
         }
         if (totalQty > 0) {
             Text(
-                text = "$totalQty item",
+                text = "$totalQty ITEM",
                 style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
     }
-}
-
-@Composable
-private fun PaymentChip(label: String, value: String, selected: String?, onSelect: (String) -> Unit) {
-    FilterChip(
-        selected = selected == value,
-        onClick = { onSelect(value) },
-        label = { Text(label) },
-    )
 }

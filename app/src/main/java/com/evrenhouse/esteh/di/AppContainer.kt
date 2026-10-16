@@ -13,6 +13,8 @@ import com.evrenhouse.esteh.data.remote.ApiClient
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
+import coil.ImageLoader
+import coil.decode.SvgDecoder
 import com.evrenhouse.esteh.viewmodel.ClockViewModel
 import com.evrenhouse.esteh.viewmodel.PosViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +38,13 @@ class AppContainer(context: Context) {
     }
 
     private val api by lazy { ApiClient.create() }
+
+    /** Coil + decoder SVG untuk foto katalog dari web (cache disk untuk offline). */
+    val imageLoader: ImageLoader by lazy {
+        ImageLoader.Builder(appContext)
+            .components { add(SvgDecoder.Factory()) }
+            .build()
+    }
 
     val posRepository: PosRepository by lazy {
         PosRepositoryImpl(api, db.transactionDao(), ApiClient.json)

@@ -21,12 +21,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.evrenhouse.esteh.data.remote.dto.DaySummary
 import com.evrenhouse.esteh.data.remote.dto.Transaction
+import com.evrenhouse.esteh.ui.theme.LocalEstehExtraColors
 import com.evrenhouse.esteh.viewmodel.RecapFilter
 
 /**
@@ -64,8 +67,15 @@ fun RecapContent(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PayCard("Cash", summary.cash.count, summary.cash.revenue, Modifier.weight(1f))
-                    PayCard("QRIS", summary.qris.count, summary.qris.revenue, Modifier.weight(1f))
+                    val extra = LocalEstehExtraColors.current
+                    PayCard(
+                        "Cash", summary.cash.count, summary.cash.revenue,
+                        extra.cashContainer, extra.onCashContainer, Modifier.weight(1f),
+                    )
+                    PayCard(
+                        "QRIS", summary.qris.count, summary.qris.revenue,
+                        extra.qrisContainer, extra.onQrisContainer, Modifier.weight(1f),
+                    )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 summary.perMenu.values.forEach { m ->
@@ -79,6 +89,8 @@ fun RecapContent(
             }
         }
         item {
+            MicroLabel("Riwayat")
+            Spacer(modifier = Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RecapFilter.entries.forEach { f ->
                     FilterChip(
@@ -121,22 +133,38 @@ fun RecapContent(
 }
 
 @Composable
-private fun PayCard(label: String, count: Int, revenue: Int, modifier: Modifier = Modifier) {
+private fun PayCard(
+    label: String,
+    count: Int,
+    revenue: Int,
+    container: Color,
+    onContainer: Color,
+    modifier: Modifier = Modifier,
+) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = CardDefaults.cardColors(containerColor = container),
+        shape = MaterialTheme.shapes.medium,
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = label, style = MaterialTheme.typography.labelSmall)
+            Text(
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = onContainer,
+            )
             Text(
                 text = revenue.toRp(),
                 style = MaterialTheme.typography.titleMedium,
                 fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = onContainer,
             )
             Text(
-                text = "$count transaksi",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = "$count TRANSAKSI",
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = onContainer,
             )
         }
     }

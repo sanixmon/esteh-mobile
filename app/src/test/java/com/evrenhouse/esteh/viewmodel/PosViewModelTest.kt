@@ -237,7 +237,7 @@ class PosViewModelTest {
     }
 
     @Test
-    fun `receipt hidden when toggle off`() = runTest {
+    fun `receipt hidden when toggle off resets cart`() = runTest {
         val (v, pos, _) = vm(settings = FakeSettings(showReceipt = false))
         advanceUntilIdle()
         v.setPayment(Transaction.CASH)
@@ -246,8 +246,10 @@ class PosViewModelTest {
         v.checkout()
         advanceUntilIdle()
         assertEquals(1, pos.checkoutCalls)
-        assertNotNull(v.state.value.receipt)
+        assertTrue(v.state.value.cart.isEmpty())
+        assertNull(v.state.value.receipt)
         assertEquals(Sheet.NONE, v.state.value.sheet)
+        assertTrue(v.state.value.snackbar!!.contains("tersimpan"))
     }
 
     @Test
