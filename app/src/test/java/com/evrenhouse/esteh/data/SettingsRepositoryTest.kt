@@ -138,4 +138,30 @@ class SettingsRepositoryTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `offline save marks dirty refresh pushes when back`() = runTest {
+        val dir = tmp.root
+        try {
+            val api = FakeApiService()
+            api.putSettingsHandler = { throw IOException("down") }
+            val (r, _, _) = repo(api, dir)
+            assertEquals(SavePricesResult.SavedOffline, r.savePrices(Settings(12000, 13000)))
+            // Refresh saat masih offline: lokal dipertahankan, tidak pull.
+            api.getSettingsHandler = { SettingsResponse(Settings(9000, 9000)) }
+            r.refreshFromBackend()
+            assertEquals(12000, r.pricesFlow.first().esTeh)
+            // Backend kembali: refresh mendorong lokal yang dirty.
+            var pushed: Settings? = null
+            api.putSettingsHandler = { pushed = it; SettingsResponse(it) }
+            r.refreshFromBackend()
+            assertEquals(Settings(12000, 13000), pushed)
+            // Dirty bersih: refresh berikutnya pull normal.
+            api.getSettingsHandler = { SettingsResponse(Settings(9000, 9500)) }
+            r.refreshFromBackend()
+            assertEquals(9000, r.pricesFlow.first().esTeh)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }

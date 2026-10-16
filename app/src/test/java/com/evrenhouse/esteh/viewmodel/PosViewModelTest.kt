@@ -226,6 +226,23 @@ class PosViewModelTest {
     }
 
     @Test
+    fun `rejected shows message no receipt stuck flag`() = runTest {
+        val pos = FakePos()
+        pos.checkoutHandler = { CheckoutResult.Rejected("Transaksi tidak valid") }
+        val (v, _, _) = vm(pos = pos)
+        advanceUntilIdle()
+        v.setPayment(Transaction.CASH)
+        v.addItem("es-teh")
+        advanceUntilIdle()
+        v.checkout()
+        advanceUntilIdle()
+        assertNull(v.state.value.receipt)
+        assertEquals(false, v.state.value.isCompleting)
+        assertEquals("Ditolak: Transaksi tidak valid", v.state.value.snackbar)
+        assertEquals(Sheet.NONE, v.state.value.sheet)
+    }
+
+    @Test
     fun `qty zero removes line`() = runTest {
         val (v, _, _) = vm()
         advanceUntilIdle()

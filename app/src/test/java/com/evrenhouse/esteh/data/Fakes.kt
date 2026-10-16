@@ -16,7 +16,7 @@ import com.evrenhouse.esteh.data.remote.dto.TransactionResponse
 class FakeApiService : ApiService {
     var summaryHandler: () -> SummaryResponse = { throw UnsupportedOperationException() }
     var todayHandler: () -> TodayResponse = { throw UnsupportedOperationException() }
-    var postHandler: (Transaction) -> TransactionResponse = { throw UnsupportedOperationException() }
+    var postHandler: suspend (Transaction) -> TransactionResponse = { throw UnsupportedOperationException() }
     var getSettingsHandler: () -> SettingsResponse = { throw UnsupportedOperationException() }
     var putSettingsHandler: (Settings) -> SettingsResponse = { throw UnsupportedOperationException() }
     var postCalls = 0
@@ -42,6 +42,7 @@ class FakeTransactionDao : TransactionDao {
         rows.values.filter { it.pendingSync }.sortedBy { it.createdAtMs }
     override suspend fun byId(id: String): TransactionEntity? = rows[id]
     override suspend fun markSynced(id: String) { rows[id]?.let { rows[id] = it.copy(pendingSync = false) } }
+    override suspend fun delete(id: String) { rows.remove(id) }
     override suspend fun pendingCount(): Int = rows.values.count { it.pendingSync }
 }
 

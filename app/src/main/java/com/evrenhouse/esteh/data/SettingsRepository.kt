@@ -16,6 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 sealed interface SavePricesResult {
@@ -45,6 +47,9 @@ class SettingsRepositoryImpl(
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : SettingsRepository {
 
+    /** Serialisasi save vs refresh agar tak ada update yang hilang. */
+    private val mutex = Mutex()
+
     override val pricesFlow: Flow<Settings> = store.data.map { p ->
         Settings(
             esTeh = p[ES_TEH] ?: Settings.DEFAULT.esTeh,
@@ -57,22 +62,42 @@ class SettingsRepositoryImpl(
     override val showReceiptFlow: Flow<Boolean> = store.data.map { it[SHOW_RECEIPT] ?: true }
 
     override suspend fun refreshFromBackend() = withContext(io) {
-        try {
-            val s = api.getSettings().settings
-            if (s.isValid()) saveLocal(s)
-        } catch (_: IOException) {
-            // offline: pertahankan lokal
+        mutex.withLock {
+            if (store.data.first()[DIRTY] == true) {
+                // Lokal pernah ditulis saat offline: dorong ke backend, jangan pull.
+                val local = Settings(
+                    esTeh = store.data.first()[ES_TEH] ?: Settings.DEFAULT.esTeh,
+                    lemonTea = store.data.first()[LEMON_TEA] ?: Settings.DEFAULT.lemonTea,
+                )
+                try {
+                    api.putSettings(local)
+                    store.edit { it[DIRTY] = false }
+                } catch (_: IOException) {
+                    // tetap dirty, coba lagi nanti
+                }
+                return@withLock
+            }
+            try {
+                val s = api.getSettings().settings
+                if (s.isValid()) saveLocal(s)
+            } catch (_: IOException) {
+                // offline: pertahankan lokal
+            }
         }
     }
 
     override suspend fun savePrices(settings: Settings): SavePricesResult = withContext(io) {
-        if (!settings.isValid()) return@withContext SavePricesResult.Invalid
-        saveLocal(settings)
-        try {
-            api.putSettings(settings)
-            SavePricesResult.Saved
-        } catch (_: IOException) {
-            SavePricesResult.SavedOffline
+        mutex.withLock {
+            if (!settings.isValid()) return@withLock SavePricesResult.Invalid
+            saveLocal(settings)
+            try {
+                api.putSettings(settings)
+                store.edit { it[DIRTY] = false }
+                SavePricesResult.Saved
+            } catch (_: IOException) {
+                store.edit { it[DIRTY] = true }
+                SavePricesResult.SavedOffline
+            }
         }
     }
 
@@ -97,6 +122,7 @@ class SettingsRepositoryImpl(
         val LEMON_TEA = intPreferencesKey("prices_lemon_tea")
         val LAST_PAYMENT = stringPreferencesKey("last_payment")
         val SHOW_RECEIPT = booleanPreferencesKey("show_receipt")
+        val DIRTY = booleanPreferencesKey("prices_dirty")
         const val PRICES_KV = "prices"
     }
 }

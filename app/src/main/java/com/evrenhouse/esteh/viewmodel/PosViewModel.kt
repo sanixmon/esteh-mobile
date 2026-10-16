@@ -165,11 +165,20 @@ class PosViewModel(
                 totalAmount = s.totalAmount,
                 paymentMethod = s.payment!!,
             )
-            when (val r = pos.checkout(tx)) {
+            // Jaring pengaman: bug repository tak boleh crash + flag nyangkut.
+            val result = try {
+                pos.checkout(tx)
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(isCompleting = false, snackbar = "Gagal checkout: ${e.message ?: "unknown"}")
+                }
+                return@launch
+            }
+            when (result) {
                 is CheckoutResult.Synced -> _state.update {
                     if (it.showReceipt) {
                         it.copy(
-                            isCompleting = false, receipt = r.transaction,
+                            isCompleting = false, receipt = result.transaction,
                             sheet = Sheet.RECEIPT, offline = false,
                         )
                     } else {
@@ -177,14 +186,14 @@ class PosViewModel(
                         it.copy(
                             isCompleting = false, cart = emptyMap(), receipt = null,
                             sheet = Sheet.NONE, offline = false,
-                            snackbar = "Transaksi ${r.transaction.id} tersimpan",
+                            snackbar = "Transaksi ${result.transaction.id} tersimpan",
                         )
                     }
                 }
                 is CheckoutResult.SavedOffline -> _state.update {
                     if (it.showReceipt) {
                         it.copy(
-                            isCompleting = false, receipt = r.transaction,
+                            isCompleting = false, receipt = result.transaction,
                             sheet = Sheet.RECEIPT, offline = true,
                             snackbar = "Offline — tersimpan lokal",
                         )
@@ -195,6 +204,9 @@ class PosViewModel(
                             snackbar = "Offline — tersimpan lokal",
                         )
                     }
+                }
+                is CheckoutResult.Rejected -> _state.update {
+                    it.copy(isCompleting = false, snackbar = "Ditolak: ${result.message}")
                 }
             }
             pos.getSummary().onSuccess { sum -> _state.update { it.copy(summary = sum) } }

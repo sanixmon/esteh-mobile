@@ -48,6 +48,9 @@ interface TransactionDao {
     @Query("UPDATE `transactions` SET pendingSync = 0 WHERE id = :id")
     suspend fun markSynced(id: String)
 
+    @Query("DELETE FROM `transactions` WHERE id = :id")
+    suspend fun delete(id: String)
+
     @Query("SELECT COUNT(*) FROM `transactions` WHERE pendingSync = 1")
     suspend fun pendingCount(): Int
 }
