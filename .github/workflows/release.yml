@@ -72,6 +72,7 @@ jobs:
       - name: Restore release keystore
         env:
           ESTEH_KEYSTORE_BASE64: ${{ secrets.ESTEH_KEYSTORE_BASE64 }}
+          ESTEH_SIGNING_PASSWORD: ${{ secrets.ESTEH_SIGNING_PASSWORD }}
         run: |
           if [ -z "$ESTEH_KEYSTORE_BASE64" ]; then
             if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
@@ -82,7 +83,17 @@ jobs:
             exit 0
           fi
           mkdir -p app/keystore
-          echo "$ESTEH_KEYSTORE_BASE64" | base64 -d > app/keystore/release.jks
+          # Single-line base64 (base64 -w0 saat set secret); toleran CRLF/spasi.
+          printf '%s' "$ESTEH_KEYSTORE_BASE64" | tr -d ' \t\r\n' | base64 -d > app/keystore/release.jks
+          if [ -z "$ESTEH_SIGNING_PASSWORD" ]; then
+            echo "ESTEH_SIGNING_PASSWORD secret belum diset." >&2
+            exit 1
+          fi
+          if ! keytool -list -keystore app/keystore/release.jks -storepass "$ESTEH_SIGNING_PASSWORD" >/dev/null 2>&1; then
+            echo "Keystore hasil restore tidak valid / password tidak cocok. Cek ulang kedua secret." >&2
+            exit 1
+          fi
+          echo "Keystore OK."
 
       - name: Run unit tests
         run: ./gradlew testReleaseUnitTest -PversionName="${{ steps.vars.outputs.version }}" --no-daemon
