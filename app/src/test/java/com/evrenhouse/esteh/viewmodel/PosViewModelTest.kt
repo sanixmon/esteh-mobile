@@ -191,7 +191,7 @@ class PosViewModelTest {
         v.checkout()
         advanceUntilIdle()
         assertEquals(true, v.state.value.offline)
-        assertEquals("Offline — tersimpan lokal", v.state.value.snackbar)
+        assertEquals("Offline — tersimpan lokal", v.state.value.snackbar?.text)
         assertNotNull(v.state.value.receipt)
     }
 
@@ -203,7 +203,7 @@ class PosViewModelTest {
         v.savePrices(0, 13000)
         advanceUntilIdle()
         assertEquals(0, settings.saveCalls)
-        assertEquals("Harga harus 1–10.000.000", v.state.value.snackbar)
+        assertEquals("Harga harus 1–10.000.000", v.state.value.snackbar?.text)
     }
 
     @Test
@@ -238,7 +238,7 @@ class PosViewModelTest {
         advanceUntilIdle()
         assertNull(v.state.value.receipt)
         assertEquals(false, v.state.value.isCompleting)
-        assertEquals("Ditolak: Transaksi tidak valid", v.state.value.snackbar)
+        assertEquals("Ditolak: Transaksi tidak valid", v.state.value.snackbar?.text)
         assertEquals(Sheet.NONE, v.state.value.sheet)
     }
 
@@ -250,7 +250,7 @@ class PosViewModelTest {
         advanceUntilIdle()
         v.changeQty("es-teh", -1)
         assertTrue(v.state.value.cart.isEmpty())
-        assertEquals("Es Teh dihapus", v.state.value.snackbar)
+        assertEquals("Es Teh dihapus", v.state.value.snackbar?.text)
     }
 
     @Test
@@ -266,7 +266,7 @@ class PosViewModelTest {
         assertTrue(v.state.value.cart.isEmpty())
         assertNull(v.state.value.receipt)
         assertEquals(Sheet.NONE, v.state.value.sheet)
-        assertTrue(v.state.value.snackbar!!.contains("tersimpan"))
+        assertTrue(v.state.value.snackbar?.text?.contains("tersimpan") == true)
     }
 
     @Test
@@ -285,6 +285,6 @@ class PosViewModelTest {
         val (v, _, _) = vm()
         advanceUntilIdle()
         v.printReceipt()
-        assertEquals("Printer Bluetooth belum disiapkan", v.state.value.snackbar)
+        assertEquals("Printer Bluetooth belum disiapkan", v.state.value.snackbar?.text)
     }
 }
