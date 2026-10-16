@@ -45,4 +45,11 @@ class UpdateCheckerTest {
     fun `build metadata ignored`() {
         assertEquals(0, UpdateChecker.compareVersions("1.0.0+42", "1.0.0"))
     }
+
+    @Test
+    fun `real release tags comparison`() {
+        assertEquals(1, UpdateChecker.compareVersions("v0.4.0", "0.3.1"))
+        assertEquals(0, UpdateChecker.compareVersions("v0.4.0", "0.4.0"))
+        assertEquals(-1, UpdateChecker.compareVersions("v0.3.1", "0.4.0"))
+    }
 }

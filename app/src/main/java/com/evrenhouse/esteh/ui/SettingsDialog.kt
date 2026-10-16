@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
@@ -56,6 +57,9 @@ fun SettingsDialog(
     onRefreshPrinters: () -> Unit = {},
     onTestPrint: () -> Unit = {},
     onRequestPermission: (() -> Unit)? = null,
+    currentVersion: String = "0.4.0",
+    isCheckingUpdate: Boolean = false,
+    onCheckUpdate: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (Int, Int) -> Unit,
 ) {
@@ -254,6 +258,35 @@ fun SettingsDialog(
                         enabled = selectedPrinter != null && !isPrinting,
                     ) {
                         Text(if (isPrinting) "Mencetak…" else "Uji Cetak")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        Text(
+                            text = "Versi Aplikasi",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = "v$currentVersion",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    TextButton(
+                        onClick = onCheckUpdate,
+                        enabled = !isCheckingUpdate,
+                    ) {
+                        Text(if (isCheckingUpdate) "Memeriksa…" else "Periksa Pembaruan")
                     }
                 }
             }

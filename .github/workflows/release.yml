@@ -129,3 +129,9 @@ jobs:
             gh release create "$RELEASE_TAG" release-assets/* \
               --title "Es Teh Evren $RELEASE_TAG" --generate-notes "${FLAGS[@]}"
           fi
+
+      - name: Notify Backend via SSE
+        run: |
+          curl -s -X POST https://esteh.sanxmon.my.id/api/ota/notify \
+            -H "Content-Type: application/json" \
+            -d "{\"tag\":\"${{ steps.vars.outputs.tag }}\",\"version\":\"${{ steps.vars.outputs.version }}\"}" || true

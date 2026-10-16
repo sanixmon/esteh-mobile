@@ -2,6 +2,7 @@ package com.evrenhouse.esteh.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.evrenhouse.esteh.BuildConfig
 import com.evrenhouse.esteh.data.CheckoutResult
 import com.evrenhouse.esteh.data.PosRepository
 import com.evrenhouse.esteh.data.SavePricesResult
@@ -15,6 +16,7 @@ import com.evrenhouse.esteh.data.remote.dto.DaySummary
 import com.evrenhouse.esteh.data.remote.dto.MenuItem
 import com.evrenhouse.esteh.data.remote.dto.Settings
 import com.evrenhouse.esteh.data.remote.dto.Transaction
+import com.evrenhouse.esteh.update.UpdateChecker
 import java.time.ZonedDateTime
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,6 +70,8 @@ data class UiState(
     val autoPrintEnabled: Boolean = true,
     val isPrinterConnected: Boolean = false,
     val isPrinting: Boolean = false,
+    val availableUpdate: UpdateChecker.UpdateInfo? = null,
+    val isCheckingUpdate: Boolean = false,
     val snackbar: Snack? = null,
     val isCompleting: Boolean = false,
     val isLoadingRecap: Boolean = false,
@@ -88,6 +92,8 @@ class PosViewModel(
     private val pos: PosRepository,
     private val settings: SettingsRepository,
     private val printer: PrinterRepository = NoOpPrinterRepository(),
+    val currentVersion: String = BuildConfig.VERSION_NAME,
+    val apiBaseUrl: String = BuildConfig.API_BASE_URL,
     private val suffixGen: () -> String = { defaultSuffix() },
 ) : ViewModel() {
 
@@ -123,6 +129,12 @@ class PosViewModel(
         }
         refreshPrinters()
         refreshAll()
+        viewModelScope.launch {
+            UpdateChecker.listenSse(apiBaseUrl, currentVersion) { info ->
+                _state.update { it.copy(availableUpdate = info) }
+            }
+        }
+        checkUpdate(manual = false)
     }
 
     fun refreshAll() {
@@ -398,6 +410,39 @@ class PosViewModel(
 
     fun dismissSnackbar() {
         _state.update { it.copy(snackbar = null) }
+    }
+
+    fun checkUpdate(manual: Boolean = false) {
+        _state.update { it.copy(isCheckingUpdate = true) }
+        viewModelScope.launch {
+            var result = UpdateChecker.checkBackend(apiBaseUrl, currentVersion)
+            if (result is UpdateChecker.CheckResult.Failed) {
+                result = UpdateChecker.check("sanixmon/esteh-mobile", currentVersion)
+            }
+            _state.update { current ->
+                when (result) {
+                    is UpdateChecker.CheckResult.Available -> {
+                        current.copy(isCheckingUpdate = false, availableUpdate = result.info)
+                    }
+                    is UpdateChecker.CheckResult.UpToDate -> {
+                        current.copy(
+                            isCheckingUpdate = false,
+                            snackbar = if (manual) Snack("Aplikasi sudah versi terbaru (v$currentVersion)", SnackKind.SUCCESS) else current.snackbar,
+                        )
+                    }
+                    is UpdateChecker.CheckResult.Failed -> {
+                        current.copy(
+                            isCheckingUpdate = false,
+                            snackbar = if (manual) Snack("Gagal memeriksa pembaruan: ${result.message}", SnackKind.ERROR) else current.snackbar,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        _state.update { it.copy(availableUpdate = null) }
     }
 }
 

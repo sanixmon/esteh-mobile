@@ -1,5 +1,7 @@
 package com.evrenhouse.esteh.ui
-
+import android.content.Intent
+import android.net.Uri
+import com.evrenhouse.esteh.BuildConfig
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -54,7 +56,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.evrenhouse.esteh.BuildConfig
 import com.evrenhouse.esteh.ui.theme.LocalEstehExtraColors
 import com.evrenhouse.esteh.viewmodel.ClockViewModel
 import com.evrenhouse.esteh.viewmodel.PosViewModel
@@ -123,6 +124,8 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
         onRefreshPrinters = checkAndRequestBluetooth,
         onTestPrint = vm::testPrint,
         onRequestPermission = checkAndRequestBluetooth,
+        onCheckUpdate = { vm.checkUpdate(manual = true) },
+        onDismissUpdate = vm::dismissUpdate,
         onDismissSnackbar = vm::dismissSnackbar,
     )
 }
@@ -153,6 +156,8 @@ fun PosScreenContent(
     onRefreshPrinters: () -> Unit = {},
     onTestPrint: () -> Unit = {},
     onRequestPermission: (() -> Unit)? = null,
+    onCheckUpdate: () -> Unit = {},
+    onDismissUpdate: () -> Unit = {},
     onDismissSnackbar: () -> Unit,
 ) {
     Scaffold(
@@ -265,6 +270,9 @@ fun PosScreenContent(
                     onRefreshPrinters = onRefreshPrinters,
                     onTestPrint = onTestPrint,
                     onRequestPermission = onRequestPermission,
+                    currentVersion = BuildConfig.VERSION_NAME,
+                    isCheckingUpdate = state.isCheckingUpdate,
+                    onCheckUpdate = onCheckUpdate,
                     onDismiss = onCloseSheet,
                     onSave = onSavePrices,
                 )
@@ -297,6 +305,25 @@ fun PosScreenContent(
                     }
                 }
                 Sheet.NONE -> Unit
+            }
+
+            val update = state.availableUpdate
+            if (update != null) {
+                val ctx = LocalContext.current
+                UpdateDialog(
+                    info = update,
+                    currentVersion = BuildConfig.VERSION_NAME,
+                    onConfirm = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(update.apkUrl)).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            ctx.startActivity(intent)
+                        } catch (_: Exception) {}
+                        onDismissUpdate()
+                    },
+                    onDismiss = onDismissUpdate,
+                )
             }
         }
     }
