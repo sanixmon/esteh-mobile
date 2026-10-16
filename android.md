@@ -73,10 +73,13 @@ Definisikan custom scheme dengan nilai eksak web:
 | line `#EAEAEA` | `outlineVariant` |
 | ink `#111111` | `onSurface`; `primary = #111111`, `onPrimary = #FFFFFF` |
 | muted `#787774` | `onSurfaceVariant` |
-| pastel yellow `#FBF3DB`/`#956400` | `cashContainer`-style custom: definisikan `cashContainer` + `onCashContainer` via `CompositionLocal` (jangan pakai `tertiaryContainer` bawaan yang ungu) |
+| pastel green `#EDF3EC`/`#346538` | custom `cashContainer` + `onCashContainer` |
 | pastel red `#FDEBEC`/`#9F2F2D` | custom `qrisContainer` + `onQrisContainer` |
 | pastel blue `#E1F3FE`/`#1F6C9F` | custom `infoContainer` + `onInfoContainer` |
-| pastel green `#EDF3EC`/`#346538` | custom `okContainer` + `onOkContainer` |
+| pastel yellow `#FBF3DB`/`#956400` | custom `warnContainer` + `onWarnContainer` |
+
+Definisikan keempat container di atas via `CompositionLocal` (jangan pakai
+`tertiaryContainer` bawaan yang ungu).
 | Pill mono uppercase 11sp | `labelSmall` + `FontFamily.Monospace` |
 | Radius 6/8/12/9999 | `Shapes`: small 6dp, medium 8/12dp, pill `CircleShape` |
 | Touch target ≥ 44dp | tombol qty/hapus/close minimal 40–48dp |

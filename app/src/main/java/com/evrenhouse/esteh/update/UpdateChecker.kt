@@ -25,17 +25,22 @@ object UpdateChecker {
         currentVersion: String,
         apiBase: String = "https://api.github.com",
     ): CheckResult = withContext(Dispatchers.IO) {
+        if (!apiBase.startsWith("https://")) {
+            return@withContext CheckResult.Failed("apiBase harus https")
+        }
+        var conn: HttpURLConnection? = null
         try {
-            val conn = (URL("$apiBase/repos/$repo/releases/latest").openConnection() as HttpURLConnection).apply {
+            conn = (URL("$apiBase/repos/$repo/releases/latest").openConnection() as HttpURLConnection).apply {
                 connectTimeout = 10_000
                 readTimeout = 10_000
                 setRequestProperty("Accept", "application/vnd.github+json")
             }
             if (conn.responseCode != 200) return@withContext CheckResult.Failed("HTTP ${conn.responseCode}")
-            val json = JSONObject(conn.inputStream.bufferedReader().readText())
+            val body = conn.inputStream.use { it.bufferedReader().readText() }
+            val json = JSONObject(body)
             val tag = json.optString("tag_name", "")
             if (tag.isBlank()) return@withContext CheckResult.Failed("Tag kosong")
-            if (compareVersions(tag.trimStart('v'), currentVersion) <= 0) {
+            if (compareVersions(tag, currentVersion) <= 0) {
                 return@withContext CheckResult.UpToDate
             }
             val assets = json.optJSONArray("assets")
@@ -50,20 +55,41 @@ object UpdateChecker {
                     }
                 }
             }
+            if (apkUrl.isBlank()) {
+                return@withContext CheckResult.Failed("APK tidak ditemukan di rilis $tag")
+            }
+            if (!apkUrl.startsWith("https://")) {
+                return@withContext CheckResult.Failed("APK URL harus https")
+            }
             CheckResult.Available(UpdateInfo(tag, apkUrl, json.optString("body", "")))
         } catch (e: Exception) {
             CheckResult.Failed(e.message ?: "unknown")
+        } finally {
+            conn?.disconnect()
         }
     }
 
     /** -1/0/1. Pure, wajib di-cover unit test. */
     fun compareVersions(a: String, b: String): Int {
-        val pa = a.split('.').map { it.toIntOrNull() ?: 0 }
-        val pb = b.split('.').map { it.toIntOrNull() ?: 0 }
+        val (pa, preA) = parseVersion(a)
+        val (pb, preB) = parseVersion(b)
         for (i in 0 until maxOf(pa.size, pb.size)) {
             val d = (pa.getOrElse(i) { 0 }) - (pb.getOrElse(i) { 0 })
             if (d != 0) return if (d > 0) 1 else -1
         }
-        return 0
+        // Basis sama: rilis > pre-release. Dua pre-release dibanding leksikal.
+        if (preA == preB) return 0
+        if (preA == null) return 1
+        if (preB == null) return -1
+        return preA.compareTo(preB).let { if (it > 0) 1 else -1 }
+    }
+
+    private fun parseVersion(v: String): Pair<List<Int>, String?> {
+        // Toleran prefix v/V, abaikan build metadata +xxx.
+        val s = v.trim().trimStart('v', 'V').split('+', limit = 2)[0]
+        val coreAndPre = s.split('-', limit = 2)
+        val nums = coreAndPre[0].split('.').map { it.toIntOrNull() ?: 0 }
+        val pre = if (coreAndPre.size > 1) coreAndPre[1].takeIf { it.isNotEmpty() } else null
+        return nums to pre
     }
 }

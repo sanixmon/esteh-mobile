@@ -28,4 +28,21 @@ class UpdateCheckerTest {
     fun `non numeric parts treated as zero`() {
         assertTrue(UpdateChecker.compareVersions("1.0.x", "1.0.0") == 0)
     }
+
+    @Test
+    fun `v prefix ignored`() {
+        assertEquals(0, UpdateChecker.compareVersions("v1.0.0", "1.0.0"))
+        assertEquals(1, UpdateChecker.compareVersions("v1.0.1", "1.0.0"))
+    }
+
+    @Test
+    fun `prerelease loses to release`() {
+        assertEquals(-1, UpdateChecker.compareVersions("1.0.0-beta", "1.0.0"))
+        assertEquals(1, UpdateChecker.compareVersions("1.0.0", "1.0.0-beta"))
+    }
+
+    @Test
+    fun `build metadata ignored`() {
+        assertEquals(0, UpdateChecker.compareVersions("1.0.0+42", "1.0.0"))
+    }
 }
