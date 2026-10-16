@@ -22,7 +22,7 @@ android {
         // Bump resmi via ./bump-version.sh (patch|minor|major).
         versionName = (project.findProperty("versionName") as? String)
             ?: System.getenv("VERSION_NAME")
-            ?: "0.1.0"
+            ?: "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Base URL backend. Default production; override lokal via
