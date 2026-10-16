@@ -1,11 +1,14 @@
-app/keystore/
+# Build outputs.
+/.gradle/
 build/
-.DS_Store
-.gradle/
+# Local SDK + credentials (jangan commit).
+local.properties
+keystore_credentials.txt
+# Release keystore: dipulihkan CI dari secret ESTEH_KEYSTORE_BASE64.
+app/keystore/
+# IDE & OS.
 .idea/
 *.iml
-keystore_credentials.txt
+.DS_Store
+# Kotlin compiler logs.
 .kotlin/
-# Kredensial lokal (jangan commit).
-local.properties
-# Release keystore: dipulihkan CI dari secret ESTEH_KEYSTORE_BASE64.
