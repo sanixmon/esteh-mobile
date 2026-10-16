@@ -8,6 +8,8 @@ import com.evrenhouse.esteh.data.PosRepository
 import com.evrenhouse.esteh.data.PosRepositoryImpl
 import com.evrenhouse.esteh.data.SettingsRepository
 import com.evrenhouse.esteh.data.SettingsRepositoryImpl
+import com.evrenhouse.esteh.data.printer.BluetoothPrinterRepository
+import com.evrenhouse.esteh.data.printer.PrinterRepository
 import com.evrenhouse.esteh.data.local.PosDatabase
 import com.evrenhouse.esteh.data.remote.ApiClient
 import androidx.lifecycle.ViewModel
@@ -54,7 +56,11 @@ class AppContainer(context: Context) {
         SettingsRepositoryImpl(api, dataStore, db.settingsDao())
     }
 
-    fun posViewModel(): PosViewModel = PosViewModel(posRepository, settingsRepository)
+    val printerRepository: PrinterRepository by lazy {
+        BluetoothPrinterRepository(appContext)
+    }
+
+    fun posViewModel(): PosViewModel = PosViewModel(posRepository, settingsRepository, printerRepository)
 
     /** Factory agar ViewModel survive rotasi (kriteria §10). */
     val vmFactory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {

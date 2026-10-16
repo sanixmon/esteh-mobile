@@ -6,6 +6,10 @@ import com.evrenhouse.esteh.data.CheckoutResult
 import com.evrenhouse.esteh.data.PosRepository
 import com.evrenhouse.esteh.data.SavePricesResult
 import com.evrenhouse.esteh.data.SettingsRepository
+import com.evrenhouse.esteh.data.printer.NoOpPrinterRepository
+import com.evrenhouse.esteh.data.printer.PrinterDevice
+import com.evrenhouse.esteh.data.printer.PrinterRepository
+import com.evrenhouse.esteh.data.printer.Receipt
 import com.evrenhouse.esteh.data.remote.WibTime
 import com.evrenhouse.esteh.data.remote.dto.DaySummary
 import com.evrenhouse.esteh.data.remote.dto.MenuItem
@@ -59,6 +63,11 @@ data class UiState(
     val sheet: Sheet = Sheet.NONE,
     val receipt: Transaction? = null,
     val showReceipt: Boolean = true,
+    val selectedPrinter: PrinterDevice? = null,
+    val pairedPrinters: List<PrinterDevice> = emptyList(),
+    val autoPrintEnabled: Boolean = true,
+    val isPrinterConnected: Boolean = false,
+    val isPrinting: Boolean = false,
     val snackbar: Snack? = null,
     val isCompleting: Boolean = false,
     val isLoadingRecap: Boolean = false,
@@ -78,6 +87,7 @@ data class UiState(
 class PosViewModel(
     private val pos: PosRepository,
     private val settings: SettingsRepository,
+    private val printer: PrinterRepository = NoOpPrinterRepository(),
     private val suffixGen: () -> String = { defaultSuffix() },
 ) : ViewModel() {
 
@@ -88,11 +98,30 @@ class PosViewModel(
         viewModelScope.launch {
             combine(
                 settings.pricesFlow,
-                settings.lastPaymentFlow,
                 settings.showReceiptFlow,
-            ) { p, _, show -> p to show }
-                .collect { (p, show) -> _state.update { it.copy(prices = p, showReceipt = show) } }
+            ) { p, show -> p to show }.collect { (p, show) ->
+                _state.update { it.copy(prices = p, showReceipt = show) }
+            }
         }
+        viewModelScope.launch {
+            combine(
+                settings.printerMacFlow,
+                settings.printerNameFlow,
+                settings.autoPrintFlow,
+            ) { mac, name, autoPrint ->
+                Triple(mac, name, autoPrint)
+            }.collect { (mac, name, autoPrint) ->
+                val device = if (!mac.isNullOrBlank()) PrinterDevice(name = name ?: mac, address = mac) else null
+                _state.update {
+                    it.copy(
+                        selectedPrinter = device,
+                        autoPrintEnabled = autoPrint,
+                        isPrinterConnected = printer.isConnected(),
+                    )
+                }
+            }
+        }
+        refreshPrinters()
         refreshAll()
     }
 
@@ -180,35 +209,40 @@ class PosViewModel(
                 return@launch
             }
             when (result) {
-                is CheckoutResult.Synced -> _state.update {
-                    if (it.showReceipt) {
-                        it.copy(
-                            isCompleting = false, receipt = result.transaction,
-                            sheet = Sheet.RECEIPT, offline = false,
-                        )
-                    } else {
-                        // Struk mati: langsung reset + kabari, tanpa sheet.
-                        it.copy(
-                            isCompleting = false, cart = emptyMap(), receipt = null,
-                            sheet = Sheet.NONE, offline = false,
-                            snackbar = Snack("Transaksi ${result.transaction.id} tersimpan", SnackKind.SUCCESS),
-                        )
+                is CheckoutResult.Synced -> {
+                    _state.update {
+                        if (it.showReceipt) {
+                            it.copy(
+                                isCompleting = false, receipt = result.transaction,
+                                sheet = Sheet.RECEIPT, offline = false,
+                            )
+                        } else {
+                            it.copy(
+                                isCompleting = false, cart = emptyMap(), receipt = null,
+                                sheet = Sheet.NONE, offline = false,
+                                snackbar = Snack("Transaksi ${result.transaction.id} tersimpan", SnackKind.SUCCESS),
+                            )
+                        }
                     }
+                    triggerAutoPrint(result.transaction)
                 }
-                is CheckoutResult.SavedOffline -> _state.update {
-                    if (it.showReceipt) {
-                        it.copy(
-                            isCompleting = false, receipt = result.transaction,
-                            sheet = Sheet.RECEIPT, offline = true,
-                            snackbar = Snack("Offline — tersimpan lokal", SnackKind.WARNING),
-                        )
-                    } else {
-                        it.copy(
-                            isCompleting = false, cart = emptyMap(), receipt = null,
-                            sheet = Sheet.NONE, offline = true,
-                            snackbar = Snack("Offline — tersimpan lokal", SnackKind.WARNING),
-                        )
+                is CheckoutResult.SavedOffline -> {
+                    _state.update {
+                        if (it.showReceipt) {
+                            it.copy(
+                                isCompleting = false, receipt = result.transaction,
+                                sheet = Sheet.RECEIPT, offline = true,
+                                snackbar = Snack("Offline — tersimpan lokal", SnackKind.WARNING),
+                            )
+                        } else {
+                            it.copy(
+                                isCompleting = false, cart = emptyMap(), receipt = null,
+                                sheet = Sheet.NONE, offline = true,
+                                snackbar = Snack("Offline — tersimpan lokal", SnackKind.WARNING),
+                            )
+                        }
                     }
+                    triggerAutoPrint(result.transaction)
                 }
                 is CheckoutResult.Rejected -> _state.update {
                     it.copy(isCompleting = false, snackbar = Snack("Ditolak: ${result.message}", SnackKind.ERROR))
@@ -265,9 +299,101 @@ class PosViewModel(
         viewModelScope.launch { settings.setShowReceipt(show) }
     }
 
-    /** Tombol Cetak di struk — printer Bluetooth (§9) menyusul. */
-    fun printReceipt() {
-        _state.update { it.copy(snackbar = Snack("Printer Bluetooth belum disiapkan", SnackKind.INFO)) }
+    fun refreshPrinters() {
+        viewModelScope.launch {
+            val paired = printer.getPairedPrinters()
+            _state.update { it.copy(pairedPrinters = paired, isPrinterConnected = printer.isConnected()) }
+        }
+    }
+
+    fun selectPrinter(device: PrinterDevice?) {
+        viewModelScope.launch {
+            settings.setPrinter(device?.address, device?.name)
+            _state.update { it.copy(selectedPrinter = device) }
+        }
+    }
+
+    fun setAutoPrint(enabled: Boolean) {
+        viewModelScope.launch {
+            settings.setAutoPrint(enabled)
+            _state.update { it.copy(autoPrintEnabled = enabled) }
+        }
+    }
+
+    fun testPrint() {
+        val target = _state.value.selectedPrinter
+        if (target == null) {
+            _state.update { it.copy(snackbar = Snack("Pilih printer terlebih dahulu di Pengaturan", SnackKind.WARNING)) }
+            return
+        }
+        _state.update { it.copy(isPrinting = true) }
+        viewModelScope.launch {
+            val res = printer.printReceipt(target, Receipt.dummyTest())
+            _state.update {
+                it.copy(
+                    isPrinting = false,
+                    isPrinterConnected = printer.isConnected(),
+                    snackbar = if (res.isSuccess) {
+                        Snack("Uji cetak berhasil dikirim ke printer", SnackKind.SUCCESS)
+                    } else {
+                        Snack("Gagal uji cetak: ${res.exceptionOrNull()?.message ?: "periksa printer"}", SnackKind.ERROR)
+                    }
+                )
+            }
+        }
+    }
+
+    fun printReceipt(tx: Transaction? = null, isReprint: Boolean = false) {
+        val targetPrinter = _state.value.selectedPrinter
+        if (targetPrinter == null) {
+            _state.update { it.copy(snackbar = Snack("Pilih printer terlebih dahulu di Pengaturan", SnackKind.WARNING)) }
+            return
+        }
+        val targetTx = tx ?: _state.value.receipt ?: return
+        _state.update { it.copy(isPrinting = true) }
+        viewModelScope.launch {
+            val receipt = Receipt.fromTransaction(targetTx, isReprint = isReprint)
+            val res = printer.printReceipt(targetPrinter, receipt)
+            _state.update {
+                it.copy(
+                    isPrinting = false,
+                    isPrinterConnected = printer.isConnected(),
+                    snackbar = if (res.isSuccess) {
+                        Snack(
+                            if (isReprint) "Struk salinan ${targetTx.id} dicetak" else "Struk ${targetTx.id} dicetak",
+                            SnackKind.SUCCESS
+                        )
+                    } else {
+                        Snack("Gagal mencetak struk: ${res.exceptionOrNull()?.message ?: "periksa printer"}", SnackKind.ERROR)
+                    }
+                )
+            }
+        }
+    }
+
+    private fun triggerAutoPrint(tx: Transaction) {
+        val s = _state.value
+        if (!s.autoPrintEnabled || s.selectedPrinter == null) return
+        val targetPrinter = s.selectedPrinter
+        viewModelScope.launch {
+            val receipt = Receipt.fromTransaction(tx, isReprint = false)
+            val printRes = printer.printReceipt(targetPrinter, receipt)
+            if (printRes.isFailure) {
+                _state.update {
+                    it.copy(
+                        receipt = tx,
+                        sheet = Sheet.RECEIPT,
+                        isPrinterConnected = printer.isConnected(),
+                        snackbar = Snack(
+                            "Transaksi tersimpan, tapi gagal cetak struk: ${printRes.exceptionOrNull()?.message ?: "printer offline"}",
+                            SnackKind.WARNING
+                        )
+                    )
+                }
+            } else {
+                _state.update { it.copy(isPrinterConnected = printer.isConnected()) }
+            }
+        }
     }
 
     fun dismissSnackbar() {

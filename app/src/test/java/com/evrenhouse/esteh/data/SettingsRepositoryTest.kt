@@ -140,6 +140,29 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `printer settings default null and autoPrint defaults true, update persists`() = runTest {
+        val dir = tmp.root
+        try {
+            val (r, _, _) = repo(FakeApiService(), dir)
+            assertNull(r.printerMacFlow.first())
+            assertNull(r.printerNameFlow.first())
+            assertEquals(true, r.autoPrintFlow.first())
+
+            r.setPrinter("00:11:22:33:44:55", "RP02N")
+            r.setAutoPrint(false)
+            assertEquals("00:11:22:33:44:55", r.printerMacFlow.first())
+            assertEquals("RP02N", r.printerNameFlow.first())
+            assertEquals(false, r.autoPrintFlow.first())
+
+            r.setPrinter(null, null)
+            assertNull(r.printerMacFlow.first())
+            assertNull(r.printerNameFlow.first())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun `offline save marks dirty refresh pushes when back`() = runTest {
         val dir = tmp.root
         try {

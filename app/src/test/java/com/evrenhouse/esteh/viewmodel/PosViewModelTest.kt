@@ -4,6 +4,9 @@ import com.evrenhouse.esteh.data.CheckoutResult
 import com.evrenhouse.esteh.data.PosRepository
 import com.evrenhouse.esteh.data.SavePricesResult
 import com.evrenhouse.esteh.data.SettingsRepository
+import com.evrenhouse.esteh.data.printer.PrinterDevice
+import com.evrenhouse.esteh.data.printer.PrinterRepository
+import com.evrenhouse.esteh.data.printer.Receipt
 import com.evrenhouse.esteh.data.remote.dto.DaySummary
 import com.evrenhouse.esteh.data.remote.dto.PayStats
 import com.evrenhouse.esteh.data.remote.dto.Settings
@@ -53,9 +56,15 @@ class PosViewModelTest {
         val pricesState = MutableStateFlow(prices)
         val lastPaymentState = MutableStateFlow(lastPayment)
         val showReceiptState = MutableStateFlow(showReceipt)
+        val printerMacState = MutableStateFlow<String?>(null)
+        val printerNameState = MutableStateFlow<String?>(null)
+        val autoPrintState = MutableStateFlow(true)
         override val pricesFlow = pricesState
         override val lastPaymentFlow = lastPaymentState
         override val showReceiptFlow = showReceiptState
+        override val printerMacFlow = printerMacState
+        override val printerNameFlow = printerNameState
+        override val autoPrintFlow = autoPrintState
         var saveCalls = 0
         var saveResult: SavePricesResult = SavePricesResult.Saved
         override suspend fun refreshFromBackend() {}
@@ -67,6 +76,54 @@ class PosViewModelTest {
         }
         override suspend fun setLastPayment(method: String) { lastPaymentState.value = method }
         override suspend fun setShowReceipt(show: Boolean) { showReceiptState.value = show }
+        override suspend fun setPrinter(mac: String?, name: String?) {
+            printerMacState.value = mac
+            printerNameState.value = name
+        }
+        override suspend fun setAutoPrint(enabled: Boolean) { autoPrintState.value = enabled }
+    }
+
+    class FakePrinter(
+        var paired: List<PrinterDevice> = emptyList(),
+        var connectResult: Result<Unit> = Result.success(Unit),
+        var printResult: Result<Unit> = Result.success(Unit),
+    ) : PrinterRepository {
+        var printCalls = 0
+        var lastPrintedReceipt: Receipt? = null
+        var lastPrintedDevice: PrinterDevice? = null
+        var connected = false
+
+        override suspend fun getPairedPrinters(): List<PrinterDevice> = paired
+        override suspend fun scanPrinters(): List<PrinterDevice> = paired
+        override suspend fun connect(device: PrinterDevice): Result<Unit> {
+            connected = connectResult.isSuccess
+            return connectResult
+        }
+        override suspend fun disconnect() { connected = false }
+        override fun isConnected(): Boolean = connected
+        override suspend fun printReceipt(receipt: Receipt): Result<Unit> {
+            printCalls++
+            lastPrintedReceipt = receipt
+            return printResult
+        }
+        override suspend fun printReceipt(device: PrinterDevice, receipt: Receipt): Result<Unit> {
+            lastPrintedDevice = device
+            printCalls++
+            lastPrintedReceipt = receipt
+            return printResult
+        }
+    }
+
+    class VmFixture(
+        val vm: PosViewModel,
+        val pos: FakePos,
+        val settings: FakeSettings,
+        val printer: FakePrinter,
+    ) {
+        operator fun component1() = vm
+        operator fun component2() = pos
+        operator fun component3() = settings
+        operator fun component4() = printer
     }
 
     @Before
@@ -82,7 +139,8 @@ class PosViewModelTest {
     private fun vm(
         pos: FakePos = FakePos(),
         settings: FakeSettings = FakeSettings(),
-    ) = Triple(PosViewModel(pos, settings, suffixGen = { "T001" }), pos, settings)
+        printer: FakePrinter = FakePrinter(),
+    ) = VmFixture(PosViewModel(pos, settings, printer, suffixGen = { "T001" }), pos, settings, printer)
 
     @Test
     fun `addItem prices from settings, accumulates`() = runTest {
@@ -281,10 +339,71 @@ class PosViewModelTest {
     }
 
     @Test
-    fun `print placeholder snackbars`() = runTest {
+    fun `printReceipt without selected printer shows warning`() = runTest {
         val (v, _, _) = vm()
         advanceUntilIdle()
         v.printReceipt()
-        assertEquals("Printer Bluetooth belum disiapkan", v.state.value.snackbar?.text)
+        assertEquals("Pilih printer terlebih dahulu di Pengaturan", v.state.value.snackbar?.text)
+    }
+
+    @Test
+    fun `selectPrinter and testPrint succeeds`() = runTest {
+        val printer = FakePrinter()
+        val (v, _, settings) = vm(printer = printer)
+        advanceUntilIdle()
+        val device = PrinterDevice("RP02N", "00:11:22:33:44:55")
+        v.selectPrinter(device)
+        advanceUntilIdle()
+        assertEquals("00:11:22:33:44:55", settings.printerMacState.value)
+        assertEquals("RP02N", settings.printerNameState.value)
+        assertEquals(device, v.state.value.selectedPrinter)
+
+        v.testPrint()
+        advanceUntilIdle()
+        assertEquals(1, printer.printCalls)
+        assertEquals("Uji cetak berhasil dikirim ke printer", v.state.value.snackbar?.text)
+    }
+
+    @Test
+    fun `checkout with autoPrint prints receipt automatically`() = runTest {
+        val printer = FakePrinter()
+        val settings = FakeSettings()
+        val (v, _, _) = vm(settings = settings, printer = printer)
+        advanceUntilIdle()
+        val device = PrinterDevice("RP02N", "00:11:22:33:44:55")
+        v.selectPrinter(device)
+        advanceUntilIdle()
+
+        v.setPayment(Transaction.CASH)
+        v.addItem("es-teh")
+        advanceUntilIdle()
+        v.checkout()
+        advanceUntilIdle()
+
+        assertEquals(1, printer.printCalls)
+        assertNotNull(printer.lastPrintedReceipt)
+        assertEquals("Es Teh Evren", printer.lastPrintedReceipt?.storeName)
+    }
+
+    @Test
+    fun `checkout with autoPrint failure falls back to receipt sheet with warning`() = runTest {
+        val printer = FakePrinter(printResult = Result.failure(Exception("Connection lost")))
+        val settings = FakeSettings(showReceipt = false)
+        val (v, _, _) = vm(settings = settings, printer = printer)
+        advanceUntilIdle()
+        val device = PrinterDevice("RP02N", "00:11:22:33:44:55")
+        v.selectPrinter(device)
+        advanceUntilIdle()
+
+        v.setPayment(Transaction.CASH)
+        v.addItem("es-teh")
+        advanceUntilIdle()
+        v.checkout()
+        advanceUntilIdle()
+
+        // Fallback: sheet is opened despite showReceipt being false, so cashier can reprint
+        assertEquals(Sheet.RECEIPT, v.state.value.sheet)
+        assertNotNull(v.state.value.receipt)
+        assertTrue(v.state.value.snackbar?.text?.contains("gagal cetak struk") == true)
     }
 }

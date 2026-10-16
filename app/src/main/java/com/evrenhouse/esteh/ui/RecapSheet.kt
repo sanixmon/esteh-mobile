@@ -5,6 +5,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,12 +18,16 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.painterResource
+import com.evrenhouse.esteh.R
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +49,7 @@ fun RecapContent(
     filter: RecapFilter,
     isLoading: Boolean,
     onFilter: (RecapFilter) -> Unit,
+    onReprint: (Transaction) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -134,7 +140,7 @@ fun RecapContent(
                 )
             }
         } else {
-            items(txns, key = { it.id }) { tx -> TxnRow(tx) }
+            items(txns, key = { it.id }) { tx -> TxnRow(tx, onReprint) }
         }
     }
 }
@@ -179,7 +185,7 @@ private fun PayCard(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TxnRow(tx: Transaction) {
+private fun TxnRow(tx: Transaction, onReprint: (Transaction) -> Unit) {
     val clipboard = LocalClipboardManager.current
     Row(
         modifier = Modifier
@@ -209,5 +215,17 @@ private fun TxnRow(tx: Transaction) {
             style = MaterialTheme.typography.bodyLarge,
             fontFamily = FontFamily.Monospace,
         )
+        Spacer(modifier = Modifier.width(4.dp))
+        IconButton(
+            onClick = { onReprint(tx) },
+            modifier = Modifier.size(36.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_print),
+                contentDescription = "Cetak ulang struk ${tx.id}",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }

@@ -30,10 +30,15 @@ interface SettingsRepository {
     val pricesFlow: Flow<Settings>
     val lastPaymentFlow: Flow<String?>
     val showReceiptFlow: Flow<Boolean>
+    val printerMacFlow: Flow<String?>
+    val printerNameFlow: Flow<String?>
+    val autoPrintFlow: Flow<Boolean>
     suspend fun refreshFromBackend()
     suspend fun savePrices(settings: Settings): SavePricesResult
     suspend fun setLastPayment(method: String)
     suspend fun setShowReceipt(show: Boolean)
+    suspend fun setPrinter(mac: String?, name: String?)
+    suspend fun setAutoPrint(enabled: Boolean)
 }
 
 /**
@@ -60,7 +65,9 @@ class SettingsRepositoryImpl(
     override val lastPaymentFlow: Flow<String?> = store.data.map { it[LAST_PAYMENT] }
 
     override val showReceiptFlow: Flow<Boolean> = store.data.map { it[SHOW_RECEIPT] ?: true }
-
+    override val printerMacFlow: Flow<String?> = store.data.map { it[PRINTER_MAC] }
+    override val printerNameFlow: Flow<String?> = store.data.map { it[PRINTER_NAME] }
+    override val autoPrintFlow: Flow<Boolean> = store.data.map { it[AUTO_PRINT] ?: true }
     override suspend fun refreshFromBackend() = withContext(io) {
         mutex.withLock {
             if (store.data.first()[DIRTY] == true) {
@@ -109,6 +116,16 @@ class SettingsRepositoryImpl(
         store.edit { it[SHOW_RECEIPT] = show }
     }
 
+    override suspend fun setPrinter(mac: String?, name: String?) {
+        store.edit { prefs ->
+            if (mac == null) prefs.remove(PRINTER_MAC) else prefs[PRINTER_MAC] = mac
+            if (name == null) prefs.remove(PRINTER_NAME) else prefs[PRINTER_NAME] = name
+        }
+    }
+
+    override suspend fun setAutoPrint(enabled: Boolean) {
+        store.edit { it[AUTO_PRINT] = enabled }
+    }
     private suspend fun saveLocal(s: Settings) {
         store.edit {
             it[ES_TEH] = s.esTeh
@@ -122,6 +139,9 @@ class SettingsRepositoryImpl(
         val LEMON_TEA = intPreferencesKey("prices_lemon_tea")
         val LAST_PAYMENT = stringPreferencesKey("last_payment")
         val SHOW_RECEIPT = booleanPreferencesKey("show_receipt")
+        val PRINTER_MAC = stringPreferencesKey("printer_mac")
+        val PRINTER_NAME = stringPreferencesKey("printer_name")
+        val AUTO_PRINT = booleanPreferencesKey("auto_print")
         val DIRTY = booleanPreferencesKey("prices_dirty")
         const val PRICES_KV = "prices"
     }

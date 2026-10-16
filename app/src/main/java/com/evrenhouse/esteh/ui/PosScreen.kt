@@ -1,6 +1,15 @@
 package com.evrenhouse.esteh.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.evrenhouse.esteh.data.printer.PrinterDevice
+import com.evrenhouse.esteh.data.remote.dto.Transaction
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -65,6 +74,28 @@ import java.time.ZonedDateTime
 fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val now by clockVm.now.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    val bluetoothLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            vm.refreshPrinters()
+        }
+    }
+
+    val checkAndRequestBluetooth = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                bluetoothLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            } else {
+                vm.refreshPrinters()
+            }
+        } else {
+            vm.refreshPrinters()
+        }
+    }
+
     PosScreenContent(
         state = state,
         now = now,
@@ -77,12 +108,21 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
         onNewTransaction = vm::newTransaction,
         onOpenRecap = vm::openRecap,
         onCloseSheet = vm::closeSheet,
-        onOpenSettings = vm::openSettings,
+        onOpenSettings = {
+            checkAndRequestBluetooth()
+            vm.openSettings()
+        },
         onRefresh = vm::refreshAll,
         onFilter = vm::setRecapFilter,
         onSavePrices = vm::savePrices,
         onToggleReceipt = vm::setShowReceipt,
-        onPrint = vm::printReceipt,
+        onPrint = { vm.printReceipt() },
+        onReprint = { tx -> vm.printReceipt(tx, isReprint = true) },
+        onSelectPrinter = vm::selectPrinter,
+        onToggleAutoPrint = vm::setAutoPrint,
+        onRefreshPrinters = checkAndRequestBluetooth,
+        onTestPrint = vm::testPrint,
+        onRequestPermission = checkAndRequestBluetooth,
         onDismissSnackbar = vm::dismissSnackbar,
     )
 }
@@ -107,6 +147,12 @@ fun PosScreenContent(
     onSavePrices: (Int, Int) -> Unit,
     onToggleReceipt: (Boolean) -> Unit,
     onPrint: () -> Unit,
+    onReprint: (Transaction) -> Unit = {},
+    onSelectPrinter: (PrinterDevice?) -> Unit = {},
+    onToggleAutoPrint: (Boolean) -> Unit = {},
+    onRefreshPrinters: () -> Unit = {},
+    onTestPrint: () -> Unit = {},
+    onRequestPermission: (() -> Unit)? = null,
     onDismissSnackbar: () -> Unit,
 ) {
     Scaffold(
@@ -177,6 +223,7 @@ fun PosScreenContent(
                                 filter = state.recapFilter,
                                 isLoading = state.isLoadingRecap,
                                 onFilter = onFilter,
+                                onReprint = onReprint,
                             )
                         }
                     } else {
@@ -197,6 +244,7 @@ fun PosScreenContent(
                                         filter = state.recapFilter,
                                         isLoading = state.isLoadingRecap,
                                         onFilter = onFilter,
+                                        onReprint = onReprint,
                                     )
                                 }
                             }
@@ -207,6 +255,16 @@ fun PosScreenContent(
                     current = state.prices,
                     showReceipt = state.showReceipt,
                     onToggleReceipt = onToggleReceipt,
+                    selectedPrinter = state.selectedPrinter,
+                    pairedPrinters = state.pairedPrinters,
+                    autoPrintEnabled = state.autoPrintEnabled,
+                    isPrinterConnected = state.isPrinterConnected,
+                    isPrinting = state.isPrinting,
+                    onSelectPrinter = onSelectPrinter,
+                    onToggleAutoPrint = onToggleAutoPrint,
+                    onRefreshPrinters = onRefreshPrinters,
+                    onTestPrint = onTestPrint,
+                    onRequestPermission = onRequestPermission,
                     onDismiss = onCloseSheet,
                     onSave = onSavePrices,
                 )

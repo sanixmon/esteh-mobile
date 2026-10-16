@@ -232,5 +232,5 @@ Web: jika backend offline → fallback window.print() (browser)
 - [ ] Ganti harga di Pengaturan → transaksi baru pakai harga baru, nota lama tidak berubah.
 - [ ] Tidak ada full-recompose tiap detik (cek Layout Inspector), tidak ada blur, font hanya sistem sans + mono.
 - [ ] Rotasi layar / resize tidak menghilangkan cart.
-- [ ] Printer: pair RP02N → uji cetak keluar struk Es Teh 32 kolom;
+- [x] Printer: pair RP02N → uji cetak keluar struk Es Teh 32 kolom, auto-print checkout, cetak ulang di rekap;
   job web (tahap 2) tercetak ≤ 10 dtk setelah tap Cetak.
