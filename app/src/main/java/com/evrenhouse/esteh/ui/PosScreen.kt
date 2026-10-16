@@ -1,47 +1,44 @@
 package com.evrenhouse.esteh.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -52,92 +49,139 @@ import com.evrenhouse.esteh.BuildConfig
 import com.evrenhouse.esteh.ui.theme.LocalEstehExtraColors
 import com.evrenhouse.esteh.viewmodel.ClockViewModel
 import com.evrenhouse.esteh.viewmodel.PosViewModel
+import com.evrenhouse.esteh.viewmodel.RecapFilter
 import com.evrenhouse.esteh.viewmodel.Sheet
+import com.evrenhouse.esteh.viewmodel.UiState
 import com.evrenhouse.esteh.viewmodel.assetUrl
 import com.evrenhouse.esteh.viewmodel.menuCatalog
+import java.time.ZonedDateTime
 
 /**
- * Layar POS adaptif (§4): HP = kolom + bottom bar sticky + checkout sheet;
- * tablet landscape (≥840dp) = 2 kolom, checkout 400dp tanpa scroll halaman.
- * Struk/receipt ditunda: sukses checkout → snackbar + reset cart.
+ * Layar kasir: TopAppBar + katalog | keranjang.
+ * ≥600dp: split Row (katalog 0.62 / keranjang 0.38 + VerticalDivider).
+ * <600dp: kolom (katalog atas, keranjang bawah).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
-    val snack = remember { SnackbarHostState() }
-    var showCheckout by remember { mutableStateOf(false) }
-    val vmMessage = state.snackbar
+    val now by clockVm.now.collectAsStateWithLifecycle()
+    PosScreenContent(
+        state = state,
+        now = now,
+        onAdd = vm::addItem,
+        onChangeQty = vm::changeQty,
+        onRemove = vm::removeItem,
+        onClear = vm::clearCart,
+        onPayment = vm::setPayment,
+        onCheckout = vm::checkout,
+        onNewTransaction = vm::newTransaction,
+        onOpenRecap = vm::openRecap,
+        onCloseSheet = vm::closeSheet,
+        onOpenSettings = vm::openSettings,
+        onRefresh = vm::refreshAll,
+        onFilter = vm::setRecapFilter,
+        onSavePrices = vm::savePrices,
+        onToggleReceipt = vm::setShowReceipt,
+        onPrint = vm::printReceipt,
+        onDismissSnackbar = vm::dismissSnackbar,
+    )
+}
 
-    LaunchedEffect(vmMessage) {
-        if (vmMessage != null) {
-            snack.showSnackbar(vmMessage)
-            vm.dismissSnackbar()
-        }
-    }
-
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PosScreenContent(
+    state: UiState,
+    now: ZonedDateTime,
+    onAdd: (String) -> Unit,
+    onChangeQty: (String, Int) -> Unit,
+    onRemove: (String) -> Unit,
+    onClear: () -> Unit,
+    onPayment: (String) -> Unit,
+    onCheckout: () -> Unit,
+    onNewTransaction: () -> Unit,
+    onOpenRecap: () -> Unit,
+    onCloseSheet: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onRefresh: () -> Unit,
+    onFilter: (RecapFilter) -> Unit,
+    onSavePrices: (Int, Int) -> Unit,
+    onToggleReceipt: (Boolean) -> Unit,
+    onPrint: () -> Unit,
+    onDismissSnackbar: () -> Unit,
+) {
     Scaffold(
-        snackbarHost = { EstehSnackbar(snack) },
+        topBar = {
+            PosTopBar(
+                now = now,
+                offline = state.offline,
+                onRefresh = onRefresh,
+                onOpenRecap = onOpenRecap,
+                onOpenSettings = onOpenSettings,
+            )
+        },
+        snackbarHost = { SnackOverlay(state.snackbar, onDismissSnackbar) },
+        contentWindowInsets = WindowInsets.safeDrawing,
     ) { inner ->
         BoxWithConstraints(
             modifier = Modifier.fillMaxSize().padding(inner),
         ) {
-            val tablet = maxWidth >= 840.dp
-            if (tablet) {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    MenuPane(
-                        vm = vm,
-                        modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+            if (maxWidth < 600.dp) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    CatalogGrid(
+                        state = state,
+                        onAdd = onAdd,
+                        modifier = Modifier.weight(1f),
                     )
-                    Surface(
-                        tonalElevation = 3.dp,
-                        modifier = Modifier.width(400.dp).fillMaxSize(),
-                    ) {
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            Header(vm, clockVm)
-                            CartPane(vm)
-                        }
-                    }
+                    HorizontalDivider()
+                    CartPane(
+                        state = state,
+                        onChangeQty = onChangeQty,
+                        onRemove = onRemove,
+                        onClear = onClear,
+                        onPayment = onPayment,
+                        onCheckout = onCheckout,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Header(vm, clockVm, modifier = Modifier.padding(horizontal = 16.dp))
-                    Column(
-                        modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp),
-                    ) {
-                        MenuPane(vm = vm)
-                    }
-                    BottomBar(
-                        state.totalQty,
-                        state.totalAmount,
-                        onOpen = { showCheckout = true },
+                Row(modifier = Modifier.fillMaxSize()) {
+                    CatalogGrid(
+                        state = state,
+                        onAdd = onAdd,
+                        modifier = Modifier.weight(0.62f).fillMaxHeight(),
                     )
-                }
-            }
-
-            if (showCheckout && !tablet) {
-                ModalBottomSheet(
-                    onDismissRequest = { showCheckout = false },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    dragHandle = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            BottomSheetDefaults.DragHandle()
-                            IconButton(onClick = { showCheckout = false }) {
-                                Icon(Icons.Filled.Close, contentDescription = "Tutup")
-                            }
-                        }
-                    },
-                ) {
-                    CartPane(vm, onDone = { showCheckout = false })
+                    VerticalDivider()
+                    CartPane(
+                        state = state,
+                        onChangeQty = onChangeQty,
+                        onRemove = onRemove,
+                        onClear = onClear,
+                        onPayment = onPayment,
+                        onCheckout = onCheckout,
+                        modifier = Modifier.weight(0.38f).fillMaxHeight(),
+                    )
                 }
             }
 
             when (state.sheet) {
                 Sheet.RECAP -> {
-                    if (tablet) {
+                    if (maxWidth < 600.dp) {
+                        ModalBottomSheet(
+                            onDismissRequest = onCloseSheet,
+                            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                        ) {
+                            SheetTitle("Rekap harian", onCloseSheet)
+                            RecapContent(
+                                summary = state.summary,
+                                txns = state.filteredTxns,
+                                filter = state.recapFilter,
+                                isLoading = state.isLoadingRecap,
+                                onFilter = onFilter,
+                            )
+                        }
+                    } else {
                         Dialog(
-                            onDismissRequest = vm::closeSheet,
+                            onDismissRequest = onCloseSheet,
                             properties = DialogProperties(usePlatformDefaultWidth = false),
                         ) {
                             Surface(
@@ -145,35 +189,16 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
                                 shape = MaterialTheme.shapes.medium,
                                 modifier = Modifier.width(660.dp).heightIn(max = 600.dp),
                             ) {
-                                Column(modifier = Modifier.padding(vertical = 16.dp)) {
-                                    SheetTitle("Rekap harian", vm::closeSheet)
+                                Column(modifier = Modifier.padding(vertical = EstehSpace.Md)) {
+                                    SheetTitle("Rekap harian", onCloseSheet)
                                     RecapContent(
                                         summary = state.summary,
                                         txns = state.filteredTxns,
                                         filter = state.recapFilter,
                                         isLoading = state.isLoadingRecap,
-                                        onFilter = vm::setRecapFilter,
+                                        onFilter = onFilter,
                                     )
                                 }
-                            }
-                        }
-                    } else {
-                        ModalBottomSheet(
-                            onDismissRequest = vm::closeSheet,
-                            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp),
-                            ) {
-                                SheetTitle("Rekap harian", vm::closeSheet)
-                                RecapContent(
-                                    summary = state.summary,
-                                    txns = state.filteredTxns,
-                                    filter = state.recapFilter,
-                                    isLoading = state.isLoadingRecap,
-                                    onFilter = vm::setRecapFilter,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
                             }
                         }
                     }
@@ -181,16 +206,23 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
                 Sheet.SETTINGS -> SettingsDialog(
                     current = state.prices,
                     showReceipt = state.showReceipt,
-                    onToggleReceipt = vm::setShowReceipt,
-                    onDismiss = vm::closeSheet,
-                    onSave = vm::savePrices,
+                    onToggleReceipt = onToggleReceipt,
+                    onDismiss = onCloseSheet,
+                    onSave = onSavePrices,
                 )
                 Sheet.RECEIPT -> {
                     val tx = state.receipt
                     if (tx != null) {
-                        if (tablet) {
+                        if (maxWidth < 600.dp) {
+                            ModalBottomSheet(
+                                onDismissRequest = onNewTransaction,
+                                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                            ) {
+                                ReceiptContent(tx = tx, onPrint = onPrint, onNew = onNewTransaction)
+                            }
+                        } else {
                             Dialog(
-                                onDismissRequest = vm::newTransaction,
+                                onDismissRequest = onNewTransaction,
                                 properties = DialogProperties(usePlatformDefaultWidth = false),
                             ) {
                                 Surface(
@@ -198,25 +230,10 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
                                     shape = MaterialTheme.shapes.medium,
                                     modifier = Modifier.width(480.dp).heightIn(max = 600.dp),
                                 ) {
-                                    Column(modifier = Modifier.padding(vertical = 16.dp)) {
-                                        ReceiptContent(
-                                            tx = tx,
-                                            onPrint = vm::printReceipt,
-                                            onNew = vm::newTransaction,
-                                        )
+                                    Column(modifier = Modifier.padding(vertical = EstehSpace.Md)) {
+                                        ReceiptContent(tx = tx, onPrint = onPrint, onNew = onNewTransaction)
                                     }
                                 }
-                            }
-                        } else {
-                            ModalBottomSheet(
-                                onDismissRequest = vm::newTransaction,
-                                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                            ) {
-                                ReceiptContent(
-                                    tx = tx,
-                                    onPrint = vm::printReceipt,
-                                    onNew = vm::newTransaction,
-                                )
                             }
                         }
                     }
@@ -227,126 +244,142 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Header(vm: PosViewModel, clockVm: ClockViewModel, modifier: Modifier = Modifier) {
-    val state by vm.state.collectAsStateWithLifecycle()
-    val extras = MaterialTheme.colorScheme // akses via LocalEstehExtraColors di bawah
-    Column(modifier = modifier.padding(vertical = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                MicroLabel("Kasir")
+private fun PosTopBar(
+    now: ZonedDateTime,
+    offline: Boolean,
+    onRefresh: () -> Unit,
+    onOpenRecap: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    TopAppBar(
+        title = {
+            Column {
                 Text(
                     text = "Es Teh Evren",
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
-                ClockOf(clockVm)
+                Clock(now = now)
             }
-            if (state.offline) {
+        },
+        actions = {
+            if (offline) {
                 OfflinePill()
             }
-            TextButton(onClick = vm::refreshAll) { Text("Muat ulang") }
-            TextButton(onClick = vm::openRecap) { Text("Rekap") }
-            IconButton(onClick = vm::openSettings) {
+            TextButton(onClick = onRefresh) { Text("Muat ulang") }
+            TextButton(onClick = onOpenRecap) { Text("Rekap") }
+            IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = "Pengaturan")
             }
-        }
-    }
-}
-
-@Composable
-private fun OfflinePill() {
-    val extra = LocalEstehExtraColors.current
-    Box(
-        modifier = Modifier.clip(CircleShape).background(extra.warnContainer)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-    ) {
-        Text(
-            text = "OFFLINE",
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-            color = extra.onWarnContainer,
-        )
-    }
-}
-
-@Composable
-private fun MenuPane(vm: PosViewModel, modifier: Modifier = Modifier) {
-    val state by vm.state.collectAsStateWithLifecycle()
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        MicroLabel("Katalog")
-        menuCatalog(state.prices).forEachIndexed { i, (def, price) ->
-            StaggerIn(i) {
-                MenuCard(
-                    name = def.name,
-                    price = price,
-                    imageUrl = assetUrl(BuildConfig.API_BASE_URL, def.asset),
-                    onTap = { vm.addItem(def.menuId) },
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-    }
-}
-
-@Composable
-private fun CartPane(vm: PosViewModel, onDone: (() -> Unit)? = null) {
-    val state by vm.state.collectAsStateWithLifecycle()
-    CartSection(
-        cart = state.cart,
-        onChangeQty = vm::changeQty,
-        onRemove = vm::removeItem,
-        onClear = vm::clearCart,
-    )
-    CheckoutBar(
-        payment = state.payment,
-        totalQty = state.totalQty,
-        totalAmount = state.totalAmount,
-        canCheckout = state.canCheckout,
-        isCompleting = state.isCompleting,
-        onPayment = vm::setPayment,
-        onCheckout = {
-            vm.checkout()
-            onDone?.invoke()
         },
     )
 }
 
 @Composable
-private fun BottomBar(qty: Int, total: Int, onOpen: () -> Unit) {
-    Surface(tonalElevation = 3.dp) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                MicroLabel(if (qty == 0) "Keranjang kosong" else "$qty item")
-                Text(
-                    text = total.toRp(),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            Button(
-                onClick = onOpen,
-                enabled = qty > 0,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-            ) { Text("Lihat & Bayar") }
+private fun OfflinePill() {
+    val extra = LocalEstehExtraColors.current
+    Surface(
+        color = extra.warnContainer,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Text(
+            text = "OFFLINE",
+            style = MaterialTheme.typography.labelMedium,
+            fontFamily = FontFamily.Monospace,
+            color = extra.onWarnContainer,
+            modifier = Modifier.padding(
+                horizontal = EstehSpace.Sm,
+                vertical = EstehSpace.Xs,
+            ),
+        )
+    }
+}
+
+/** Katalog grid adaptif: kartu vertikal key=id menu. */
+@Composable
+private fun CatalogGrid(
+    state: UiState,
+    onAdd: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 168.dp),
+        contentPadding = PaddingValues(EstehSpace.Md),
+        horizontalArrangement = Arrangement.spacedBy(EstehSpace.Sm),
+        verticalArrangement = Arrangement.spacedBy(EstehSpace.Sm),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        items(
+            items = menuCatalog(state.prices),
+            key = { (def, _) -> def.menuId },
+        ) { (def, price) ->
+            MenuCard(
+                name = def.name,
+                price = price,
+                imageUrl = assetUrl(BuildConfig.API_BASE_URL, def.asset),
+                onTap = { onAdd(def.menuId) },
+            )
         }
+    }
+}
+
+/** Panel keranjang: daftar (Lazy, key=id) + footer sticky. */
+@Composable
+private fun CartPane(
+    state: UiState,
+    onChangeQty: (String, Int) -> Unit,
+    onRemove: (String) -> Unit,
+    onClear: () -> Unit,
+    onPayment: (String) -> Unit,
+    onCheckout: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(
+            start = EstehSpace.Md,
+            end = EstehSpace.Md,
+            top = EstehSpace.Md,
+            bottom = EstehSpace.Md,
+        ),
+    ) {
+        CartSection(
+            cart = state.cart,
+            onChangeQty = onChangeQty,
+            onRemove = onRemove,
+            onClear = onClear,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.height(EstehSpace.Sm))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(EstehSpace.Sm))
+        CheckoutBar(
+            payment = state.payment,
+            totalQty = state.totalQty,
+            totalAmount = state.totalAmount,
+            canCheckout = state.canCheckout,
+            isCompleting = state.isCompleting,
+            onPayment = onPayment,
+            onCheckout = onCheckout,
+        )
     }
 }
 
 @Composable
 private fun SheetTitle(title: String, onClose: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = EstehSpace.Md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-        IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Tutup") }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onClose) {
+            Icon(Icons.Filled.Close, contentDescription = "Tutup")
+        }
     }
 }

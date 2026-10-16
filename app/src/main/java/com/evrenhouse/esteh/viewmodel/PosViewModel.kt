@@ -43,6 +43,11 @@ fun assetUrl(baseUrl: String, asset: String): String =
 enum class Sheet { NONE, RECAP, SETTINGS, RECEIPT }
 enum class RecapFilter { ALL, CASH, QRIS }
 
+/** Snackbar terklasifikasi: warna + ikon mengikuti jenisnya. */
+enum class SnackKind { INFO, SUCCESS, WARNING, ERROR }
+
+data class Snack(val text: String, val kind: SnackKind = SnackKind.INFO)
+
 /** Satu UiState (android.md §8). */
 data class UiState(
     val cart: Map<String, CartLine> = emptyMap(),
@@ -54,7 +59,7 @@ data class UiState(
     val sheet: Sheet = Sheet.NONE,
     val receipt: Transaction? = null,
     val showReceipt: Boolean = true,
-    val snackbar: String? = null,
+    val snackbar: Snack? = null,
     val isCompleting: Boolean = false,
     val isLoadingRecap: Boolean = false,
     /** true bila mutasi terakhir hanya tersimpan lokal. */
@@ -115,7 +120,7 @@ class PosViewModel(
                 it.copy(
                     cart = it.cart + (menuId to next),
                     payment = it.payment ?: autoPayment,
-                    snackbar = "${def.name} ditambah",
+                    snackbar = Snack("${def.name} ditambah", SnackKind.INFO),
                 )
             }
         }
@@ -126,7 +131,7 @@ class PosViewModel(
         val qty = line.qty + delta
         _state.update {
             if (qty <= 0) {
-                it.copy(cart = it.cart - menuId, snackbar = "${line.name} dihapus")
+                it.copy(cart = it.cart - menuId, snackbar = Snack("${line.name} dihapus", SnackKind.INFO))
             } else {
                 it.copy(cart = it.cart + (menuId to line.copy(qty = qty)))
             }
@@ -135,7 +140,7 @@ class PosViewModel(
 
     fun removeItem(menuId: String) {
         val line = _state.value.cart[menuId] ?: return
-        _state.update { it.copy(cart = it.cart - menuId, snackbar = "${line.name} dihapus") }
+        _state.update { it.copy(cart = it.cart - menuId, snackbar = Snack("${line.name} dihapus", SnackKind.INFO)) }
     }
 
     fun clearCart() {
@@ -170,7 +175,7 @@ class PosViewModel(
                 pos.checkout(tx)
             } catch (e: Exception) {
                 _state.update {
-                    it.copy(isCompleting = false, snackbar = "Gagal checkout: ${e.message ?: "unknown"}")
+                    it.copy(isCompleting = false, snackbar = Snack("Gagal checkout: ${e.message ?: "unknown"}", SnackKind.ERROR))
                 }
                 return@launch
             }
@@ -186,7 +191,7 @@ class PosViewModel(
                         it.copy(
                             isCompleting = false, cart = emptyMap(), receipt = null,
                             sheet = Sheet.NONE, offline = false,
-                            snackbar = "Transaksi ${result.transaction.id} tersimpan",
+                            snackbar = Snack("Transaksi ${result.transaction.id} tersimpan", SnackKind.SUCCESS),
                         )
                     }
                 }
@@ -195,18 +200,18 @@ class PosViewModel(
                         it.copy(
                             isCompleting = false, receipt = result.transaction,
                             sheet = Sheet.RECEIPT, offline = true,
-                            snackbar = "Offline — tersimpan lokal",
+                            snackbar = Snack("Offline — tersimpan lokal", SnackKind.WARNING),
                         )
                     } else {
                         it.copy(
                             isCompleting = false, cart = emptyMap(), receipt = null,
                             sheet = Sheet.NONE, offline = true,
-                            snackbar = "Offline — tersimpan lokal",
+                            snackbar = Snack("Offline — tersimpan lokal", SnackKind.WARNING),
                         )
                     }
                 }
                 is CheckoutResult.Rejected -> _state.update {
-                    it.copy(isCompleting = false, snackbar = "Ditolak: ${result.message}")
+                    it.copy(isCompleting = false, snackbar = Snack("Ditolak: ${result.message}", SnackKind.ERROR))
                 }
             }
             pos.getSummary().onSuccess { sum -> _state.update { it.copy(summary = sum) } }
@@ -244,13 +249,13 @@ class PosViewModel(
         viewModelScope.launch {
             when (settings.savePrices(Settings(esTeh, lemonTea))) {
                 SavePricesResult.Saved -> _state.update {
-                    it.copy(sheet = Sheet.NONE, snackbar = "Harga disimpan")
+                    it.copy(sheet = Sheet.NONE, snackbar = Snack("Harga disimpan", SnackKind.SUCCESS))
                 }
                 SavePricesResult.SavedOffline -> _state.update {
-                    it.copy(sheet = Sheet.NONE, offline = true, snackbar = "Harga disimpan (offline)")
+                    it.copy(sheet = Sheet.NONE, offline = true, snackbar = Snack("Harga disimpan (offline)", SnackKind.WARNING))
                 }
                 SavePricesResult.Invalid -> _state.update {
-                    it.copy(snackbar = "Harga harus 1–10.000.000")
+                    it.copy(snackbar = Snack("Harga harus 1–10.000.000", SnackKind.ERROR))
                 }
             }
         }
@@ -262,7 +267,7 @@ class PosViewModel(
 
     /** Tombol Cetak di struk — printer Bluetooth (§9) menyusul. */
     fun printReceipt() {
-        _state.update { it.copy(snackbar = "Printer Bluetooth belum disiapkan") }
+        _state.update { it.copy(snackbar = Snack("Printer Bluetooth belum disiapkan", SnackKind.INFO)) }
     }
 
     fun dismissSnackbar() {

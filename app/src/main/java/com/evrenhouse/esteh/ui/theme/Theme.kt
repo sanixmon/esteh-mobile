@@ -1,16 +1,34 @@
 package com.evrenhouse.esteh.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
 // Radius 6/8/12/9999 (android.md §5). Pill via CircleShape di call-site.
+
+private val EstehDarkScheme = darkColorScheme(
+    primary = Canvas,
+    onPrimary = Ink,
+    surface = Color(0xFF1C1B19),
+    onSurface = Color(0xFFF5F4F0),
+    surfaceContainerLowest = Color(0xFF121110),
+    surfaceContainerLow = Color(0xFF262522),
+    surfaceContainer = Color(0xFF232220),
+    surfaceContainerHigh = Color(0xFF2D2C29),
+    onSurfaceVariant = Color(0xFFB9B6B0),
+    outlineVariant = Color(0xFF3A3936),
+    secondaryContainer = Color(0xFF2D2C29),
+    onSecondaryContainer = Color(0xFFF5F4F0),
+)
 
 private val EstehLightScheme = lightColorScheme(
     primary = Ink,
@@ -44,10 +62,10 @@ private val EstehShapes = Shapes(
 )
 
 @Composable
-fun EstehTheme(content: @Composable () -> Unit) {
+fun EstehTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalEstehExtraColors provides EstehExtraColors()) {
         MaterialTheme(
-            colorScheme = EstehLightScheme,
+            colorScheme = if (dark) EstehDarkScheme else EstehLightScheme,
             typography = EstehTypography,
             shapes = EstehShapes,
             content = content,
