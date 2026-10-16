@@ -14,12 +14,12 @@ on:
         description: 'Create as Draft release'
         required: false
         type: boolean
-        default: false
+        default: 'false'
       prerelease:
         description: 'Create as Pre-release'
         required: false
         type: boolean
-        default: false
+        default: 'false'
 
 permissions:
   contents: write
