@@ -19,8 +19,8 @@ class CatalogTest {
     @Test
     fun `asset url joins base`() {
         assertEquals(
-            "https://esteh.evrenhouse.online/assets/es-teh.svg",
-            assetUrl("https://esteh.evrenhouse.online", "es-teh.svg"),
+            "https://esteh.sanxmon.my.id/assets/es-teh.svg",
+            assetUrl("https://esteh.sanxmon.my.id", "es-teh.svg"),
         )
         assertEquals(
             "http://10.0.2.2:3006/assets/lemon-tea.svg",

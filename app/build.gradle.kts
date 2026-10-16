@@ -29,7 +29,7 @@ android {
         // -PAPI_BASE_URL=http://10.0.2.2:3006 (emulator) sesuai kebutuhan.
         val apiBaseUrl = System.getenv("API_BASE_URL")
             ?: (project.findProperty("API_BASE_URL") as? String)
-            ?: "https://esteh.evrenhouse.online"
+            ?: "https://esteh.sanxmon.my.id"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
