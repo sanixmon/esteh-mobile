@@ -10,6 +10,10 @@ import com.evrenhouse.esteh.data.SettingsRepository
 import com.evrenhouse.esteh.data.SettingsRepositoryImpl
 import com.evrenhouse.esteh.data.local.PosDatabase
 import com.evrenhouse.esteh.data.remote.ApiClient
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.CreationExtras
+import com.evrenhouse.esteh.viewmodel.ClockViewModel
 import com.evrenhouse.esteh.viewmodel.PosViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,4 +46,14 @@ class AppContainer(context: Context) {
     }
 
     fun posViewModel(): PosViewModel = PosViewModel(posRepository, settingsRepository)
+
+    /** Factory agar ViewModel survive rotasi (kriteria §10). */
+    val vmFactory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T = when {
+            modelClass.isAssignableFrom(PosViewModel::class.java) -> posViewModel() as T
+            modelClass.isAssignableFrom(ClockViewModel::class.java) -> ClockViewModel() as T
+            else -> throw IllegalArgumentException(modelClass.name)
+        }
+    }
 }
