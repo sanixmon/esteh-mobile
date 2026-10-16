@@ -22,8 +22,8 @@ class FakeApiService : ApiService {
     var postCalls = 0
     var putCalls = 0
 
-    override suspend fun getSummary(): SummaryResponse = summaryHandler()
-    override suspend fun getToday(): TodayResponse = todayHandler()
+    override suspend fun getSummary(from: String?, to: String?, date: String?): SummaryResponse = summaryHandler()
+    override suspend fun getToday(from: String?, to: String?, date: String?): TodayResponse = todayHandler()
     override suspend fun postTransaction(tx: Transaction): TransactionResponse {
         postCalls++
         return postHandler(tx)

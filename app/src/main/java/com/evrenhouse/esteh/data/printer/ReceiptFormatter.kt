@@ -21,6 +21,10 @@ class ReceiptFormatter(
             formatEsTeh(e, receipt, w)
             return e.build()
         }
+        if (receipt.type == ReceiptType.ES_TEH_RECAP) {
+            formatEsTehRecap(e, receipt, w)
+            return e.build()
+        }
 
         // Fallback for legacy formats if needed
         val title = when (receipt.type) {
@@ -28,7 +32,7 @@ class ReceiptFormatter(
             ReceiptType.SELESAI -> "Struk Selesai Sewa"
             ReceiptType.ADDITIONAL -> "Struk Tambahan Sewa"
             ReceiptType.SETTLEMENT -> "Struk Tutup Shift"
-            ReceiptType.ES_TEH -> "Struk Es Teh"
+            ReceiptType.ES_TEH, ReceiptType.ES_TEH_RECAP -> "Struk Es Teh"
         }
 
         if (receipt.type == ReceiptType.ADDITIONAL) {
@@ -100,7 +104,7 @@ class ReceiptFormatter(
                 e.text(twoCol("Total Tunai:", rp(receipt.cash ?: 0), w)).line()
                 e.text(twoCol("Total QRIS:", rp(receipt.qris ?: 0), w)).line()
             }
-            ReceiptType.ES_TEH -> Unit
+            ReceiptType.ES_TEH, ReceiptType.ES_TEH_RECAP -> Unit
         }
         e.text(dashes).line()
 
@@ -120,16 +124,21 @@ class ReceiptFormatter(
     private fun formatEsTeh(e: EscPosEncoder, receipt: Receipt, w: Int) {
         // ── 1. Header ────────────────────────────────────────────────────────
         e.alignCenter().bold(true).size(1, 2).text(receipt.storeName).size(1, 1).bold(false).line()
-        if (receipt.dateString.isNotBlank() || receipt.timeString.isNotBlank()) {
-            val dateLine = if (receipt.dateString.isNotBlank() && receipt.timeString.isNotBlank()) {
-                "${receipt.dateString} • ${receipt.timeString}"
-            } else {
-                receipt.dateString.ifBlank { receipt.timeString }
-            }
-            e.alignCenter().text(dateLine).line()
+        if (receipt.dateString.isNotBlank()) {
+            e.alignCenter().text(receipt.dateString).line()
         }
-        if (receipt.txnId.isNotBlank()) {
-            e.alignCenter().text(receipt.txnId).line()
+        val timeAndId = if (receipt.timeString.isNotBlank() && receipt.txnId.isNotBlank()) {
+            "${receipt.timeString} | ${receipt.txnId}"
+        } else {
+            receipt.timeString.ifBlank { receipt.txnId }
+        }
+        if (timeAndId.isNotBlank()) {
+            if (timeAndId.length <= w) {
+                e.alignCenter().text(timeAndId).line()
+            } else {
+                if (receipt.timeString.isNotBlank()) e.alignCenter().text(receipt.timeString).line()
+                if (receipt.txnId.isNotBlank()) e.alignCenter().text(receipt.txnId).line()
+            }
         }
         if (receipt.isReprint) {
             e.alignCenter().bold(true).text("*** SALINAN / CETAK ULANG ***").bold(false).line()
@@ -140,18 +149,81 @@ class ReceiptFormatter(
         receipt.items.forEach { item ->
             val line1 = "${item.name} x${item.qty}  ${rp(item.subtotal)}"
             itemLines(line1, w).forEach { wrapped -> e.text(wrapped).line() }
-            val line2 = "${item.qty} cup x ${rp(item.price)}"
-            e.text(line2).line()
+            val line2 = "  ${item.qty} cup x ${rp(item.price)}"
+            e.text(line2.take(w)).line()
         }
         e.text(dashes).line()
 
         // ── 3. Totals ────────────────────────────────────────────────────────
-        e.text(twoCol("Total Cup:", "${receipt.totalQty}", w)).line()
-        e.text(twoCol("Bayar:", receipt.paymentMethod.uppercase(Locale.getDefault()), w)).line()
+        e.text(twoCol("Total Cup:", "${receipt.totalQty} cup", w)).line()
+        e.text(twoCol("Metode Bayar:", receipt.paymentMethod.uppercase(Locale.getDefault()), w)).line()
         e.bold(true).text(twoCol("TOTAL:", rp(receipt.totalAmount), w)).bold(false).line()
         e.text(dashes).line()
 
         // ── 4. Footer ────────────────────────────────────────────────────────
+        e.feed(1)
+        e.alignCenter().text(receipt.footer).line()
+        e.feed(2)
+        if (profile.supportsCut) e.cut()
+    }
+
+    private fun formatEsTehRecap(e: EscPosEncoder, receipt: Receipt, w: Int) {
+        val s = receipt.summary
+        val equalsLine = "=".repeat(w)
+
+        // ── 1. Header ────────────────────────────────────────────────────────
+        e.alignCenter().bold(true).size(1, 2).text(receipt.storeName).size(1, 1).bold(false).line()
+        e.alignCenter().bold(true).text(receipt.subtitle.ifBlank { "REKAP PENJUALAN" }).bold(false).line()
+        e.alignLeft().text(dashes).line()
+
+        // ── 2. Periode & Waktu ────────────────────────────────────────────────
+        if (receipt.dateRangeLabel.isNotBlank()) {
+            if (receipt.dateRangeLabel.length + 9 <= w) {
+                e.text(twoCol("Periode:", receipt.dateRangeLabel, w)).line()
+            } else {
+                e.text("Periode:").line()
+                e.alignCenter().text(receipt.dateRangeLabel).line().alignLeft()
+            }
+        }
+        if (receipt.timeString.isNotBlank()) {
+            e.text(twoCol("Waktu Cetak:", receipt.timeString, w)).line()
+        }
+        e.text(dashes).line()
+
+        // ── 3. Ringkasan Agregat ──────────────────────────────────────────────
+        e.bold(true).text("RINGKASAN PENJUALAN:").bold(false).line()
+        val txnsCount = s?.totalTransactions ?: 0
+        val cupsCount = s?.totalCups ?: receipt.totalQty
+        e.text(twoCol("Total Transaksi:", "$txnsCount trx", w)).line()
+        e.text(twoCol("Total Volume:", "$cupsCount cup", w)).line()
+        e.text(dashes).line()
+
+        // ── 4. Rincian Produk ─────────────────────────────────────────────────
+        if (s != null && s.perMenu.isNotEmpty()) {
+            e.bold(true).text("RINCIAN PRODUK:").bold(false).line()
+            s.perMenu.values.forEach { m ->
+                val line1 = twoCol(m.name, "${m.qty} cup", w)
+                e.text(line1).line()
+                val line2 = twoCol("  Omzet", rp(m.revenue.toLong()), w)
+                e.text(line2).line()
+            }
+            e.text(dashes).line()
+        }
+
+        // ── 5. Metode Pembayaran ──────────────────────────────────────────────
+        if (s != null) {
+            e.bold(true).text("METODE PEMBAYARAN:").bold(false).line()
+            e.text(twoCol("Cash (${s.cash.count} trx):", rp(s.cash.revenue.toLong()), w)).line()
+            e.text(twoCol("QRIS (${s.qris.count} trx):", rp(s.qris.revenue.toLong()), w)).line()
+            e.text(dashes).line()
+        }
+
+        // ── 6. Total Omzet ────────────────────────────────────────────────────
+        val totalRevenue = s?.totalRevenue?.toLong() ?: receipt.totalAmount
+        e.bold(true).text(twoCol("TOTAL OMZET:", rp(totalRevenue), w)).bold(false).line()
+        e.text(equalsLine).line()
+
+        // ── 7. Footer ─────────────────────────────────────────────────────────
         e.feed(1)
         e.alignCenter().text(receipt.footer).line()
         e.feed(2)

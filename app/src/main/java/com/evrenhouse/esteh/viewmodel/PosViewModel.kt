@@ -17,6 +17,7 @@ import com.evrenhouse.esteh.data.remote.dto.MenuItem
 import com.evrenhouse.esteh.data.remote.dto.Settings
 import com.evrenhouse.esteh.data.remote.dto.Transaction
 import com.evrenhouse.esteh.update.UpdateChecker
+import java.time.LocalDate
 import java.time.ZonedDateTime
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +49,14 @@ fun assetUrl(baseUrl: String, asset: String): String =
 
 enum class Sheet { NONE, RECAP, SETTINGS, RECEIPT }
 enum class RecapFilter { ALL, CASH, QRIS }
+enum class RecapDatePreset { TODAY, YESTERDAY, LAST_7_DAYS, CUSTOM }
+
+data class RecapDateRange(
+    val preset: RecapDatePreset = RecapDatePreset.TODAY,
+    val from: String? = null,
+    val to: String? = null,
+    val label: String = "Hari Ini",
+)
 
 /** Snackbar terklasifikasi: warna + ikon mengikuti jenisnya. */
 enum class SnackKind { INFO, SUCCESS, WARNING, ERROR }
@@ -62,6 +71,7 @@ data class UiState(
     val summary: DaySummary? = null,
     val txns: List<Transaction> = emptyList(),
     val recapFilter: RecapFilter = RecapFilter.ALL,
+    val recapDateRange: RecapDateRange = RecapDateRange(),
     val sheet: Sheet = Sheet.NONE,
     val receipt: Transaction? = null,
     val showReceipt: Boolean = true,
@@ -270,19 +280,98 @@ class PosViewModel(
     }
 
     fun openRecap() {
-        _state.update { it.copy(sheet = Sheet.RECAP, isLoadingRecap = true) }
+        loadRecap(_state.value.recapDateRange)
+    }
+
+    fun setRecapDatePreset(
+        preset: RecapDatePreset,
+        customFrom: String? = null,
+        customTo: String? = null,
+        customLabel: String? = null,
+    ) {
+        val range = when (preset) {
+            RecapDatePreset.TODAY -> RecapDateRange(RecapDatePreset.TODAY, null, null, "Hari Ini")
+            RecapDatePreset.YESTERDAY -> {
+                val y = LocalDate.now(WibTime.ZONE).minusDays(1).toString()
+                RecapDateRange(RecapDatePreset.YESTERDAY, y, y, "Kemarin")
+            }
+            RecapDatePreset.LAST_7_DAYS -> {
+                val today = LocalDate.now(WibTime.ZONE)
+                val start = today.minusDays(6).toString()
+                RecapDateRange(RecapDatePreset.LAST_7_DAYS, start, today.toString(), "7 Hari Terakhir")
+            }
+            RecapDatePreset.CUSTOM -> {
+                RecapDateRange(
+                    RecapDatePreset.CUSTOM,
+                    customFrom,
+                    customTo,
+                    customLabel ?: "${customFrom ?: ""} - ${customTo ?: ""}".trim()
+                )
+            }
+        }
+        loadRecap(range)
+    }
+
+    fun loadRecap(range: RecapDateRange) {
+        _state.update { it.copy(sheet = Sheet.RECAP, isLoadingRecap = true, recapDateRange = range) }
         viewModelScope.launch {
-            pos.getToday().onSuccess { txns -> _state.update { it.copy(txns = txns) } }
-            pos.getSummary().onSuccess { s -> _state.update { it.copy(summary = s, offline = false) } }
-                .onFailure { _state.update { it.copy(offline = true) } }
+            val from = range.from
+            val to = range.to
+            pos.getToday(from = from, to = to).onSuccess { txns ->
+                _state.update { it.copy(txns = txns) }
+            }
+            pos.getSummary(from = from, to = to).onSuccess { s ->
+                _state.update { it.copy(summary = s, offline = false) }
+            }.onFailure {
+                _state.update { it.copy(offline = true) }
+            }
             _state.update { it.copy(isLoadingRecap = false) }
+        }
+    }
+
+    fun viewTransactionDetail(tx: Transaction) {
+        _state.update { it.copy(receipt = tx, sheet = Sheet.RECEIPT) }
+    }
+
+    fun printRecapReceipt() {
+        val s = _state.value
+        val summary = s.summary
+        if (summary == null) {
+            _state.update { it.copy(snackbar = Snack("Data rekap belum dimuat", SnackKind.WARNING)) }
+            return
+        }
+        val targetPrinter = s.selectedPrinter
+        if (targetPrinter == null) {
+            _state.update { it.copy(snackbar = Snack("Pilih printer terlebih dahulu di Pengaturan", SnackKind.WARNING)) }
+            return
+        }
+        val now = ZonedDateTime.now(WibTime.ZONE)
+        val timeString = WibTime.timeString(now)
+        val receipt = Receipt.fromSummary(
+            summary = summary,
+            dateRangeLabel = s.recapDateRange.label,
+            printTime = timeString
+        )
+        _state.update { it.copy(isPrinting = true) }
+        viewModelScope.launch {
+            val res = printer.printReceipt(targetPrinter, receipt)
+            _state.update {
+                it.copy(
+                    isPrinting = false,
+                    isPrinterConnected = printer.isConnected(),
+                    snackbar = if (res.isSuccess) {
+                        Snack("Struk rekap berhasil dicetak", SnackKind.SUCCESS)
+                    } else {
+                        Snack("Gagal mencetak struk rekap: ${res.exceptionOrNull()?.message ?: "periksa printer"}", SnackKind.ERROR)
+                    }
+                )
+            }
         }
     }
 
     fun setRecapFilter(f: RecapFilter) {
         _state.update { it.copy(recapFilter = f) }
     }
-
     fun openSettings() {
         _state.update { it.copy(sheet = Sheet.SETTINGS) }
     }

@@ -1,5 +1,8 @@
 package com.evrenhouse.esteh.data.printer
 
+import com.evrenhouse.esteh.data.remote.dto.DaySummary
+import com.evrenhouse.esteh.data.remote.dto.PayStats
+import com.evrenhouse.esteh.data.remote.dto.PerMenu
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -34,8 +37,8 @@ class ReceiptFormatterTest {
         val decoded = String(commands, charsetCp437)
 
         assertTrue("Should contain store name", decoded.contains("Es Teh Evren"))
-        assertTrue("Should contain date and time", decoded.contains("Jumat, 16 Oktober 2026 | 14:30:00"))
-        assertTrue("Should contain txn id", decoded.contains("TRX-20261016-0001"))
+        assertTrue("Should contain date", decoded.contains("Jumat, 16 Oktober 2026"))
+        assertTrue("Should contain time and txn id", decoded.contains("14:30:00 | TRX-20261016-0001"))
         assertFalse("Original receipt should NOT have reprint banner", decoded.contains("*** SALINAN / CETAK ULANG ***"))
         assertTrue("Should contain Es Teh item line", decoded.contains("Es Teh x2"))
         assertTrue("Should contain Es Teh subtotal", decoded.contains("Rp 20.000"))
@@ -109,5 +112,42 @@ class ReceiptFormatterTest {
         assertEquals("Rp 10.000", rp(10_000L))
         assertEquals("Rp 1.500.000", rp(1_500_000L))
         assertEquals("Rp 0", rp(0L))
+    }
+
+    @Test
+    fun testEsTehRecapFormatting() {
+        val formatter = ReceiptFormatter(PrinterProfile.GENERIC_58MM, GbkPrinterCharset())
+        val summary = DaySummary(
+            totalTransactions = 15,
+            totalRevenue = 205_000,
+            totalCups = 20,
+            perMenu = mapOf(
+                "es-teh" to PerMenu("Es Teh", 15, 150_000),
+                "lemon-tea" to PerMenu("Lemon Tea", 5, 55_000)
+            ),
+            cash = PayStats(10, 130_000),
+            qris = PayStats(5, 75_000)
+        )
+        val receipt = Receipt.fromSummary(
+            summary = summary,
+            dateRangeLabel = "10 Okt 2026 - 16 Okt 2026",
+            printTime = "14:30:00"
+        )
+
+        val commands = formatter.toCommands(receipt)
+        val decoded = String(commands, charsetCp437)
+
+        assertTrue("Should contain store name", decoded.contains("Es Teh Evren"))
+        assertTrue("Should contain subtitle", decoded.contains("REKAP PENJUALAN"))
+        assertTrue("Should contain period", decoded.contains("10 Okt 2026 - 16 Okt 2026"))
+        assertTrue("Should contain print time", decoded.contains("14:30:00"))
+        assertTrue("Should contain total txns", decoded.contains("15 trx"))
+        assertTrue("Should contain total cups", decoded.contains("20 cup"))
+        assertTrue("Should contain Es Teh", decoded.contains("Es Teh"))
+        assertTrue("Should contain Lemon Tea", decoded.contains("Lemon Tea"))
+        assertTrue("Should contain Cash stats", decoded.contains("Cash (10 trx):"))
+        assertTrue("Should contain QRIS stats", decoded.contains("QRIS (5 trx):"))
+        assertTrue("Should contain TOTAL OMZET", decoded.contains("TOTAL OMZET:"))
+        assertTrue("Should contain total revenue", decoded.contains("Rp 205.000"))
     }
 }

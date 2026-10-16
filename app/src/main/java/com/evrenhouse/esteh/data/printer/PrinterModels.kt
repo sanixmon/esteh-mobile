@@ -1,5 +1,6 @@
 package com.evrenhouse.esteh.data.printer
 
+import com.evrenhouse.esteh.data.remote.dto.DaySummary
 import com.evrenhouse.esteh.data.remote.dto.Transaction
 import java.nio.charset.Charset
 
@@ -70,7 +71,7 @@ enum class QrErrorCorrection { L, M, Q, H }
 
 enum class BarcodeType { CODE128, EAN13, CODE39 }
 
-enum class ReceiptType { ES_TEH, MULAI, SELESAI, ADDITIONAL, SETTLEMENT }
+enum class ReceiptType { ES_TEH, ES_TEH_RECAP, MULAI, SELESAI, ADDITIONAL, SETTLEMENT }
 
 data class ReceiptItem(
     val name: String,
@@ -91,6 +92,8 @@ data class Receipt(
     val paymentMethod: String = "CASH",
     val totalAmount: Long = 0,
     val isReprint: Boolean = false,
+    val summary: DaySummary? = null,
+    val dateRangeLabel: String = "",
     val footer: String = "Terima kasih!",
     // Compatibility fields for kasir-mobile formats if needed
     val queueNo: Int = 0,
@@ -132,6 +135,20 @@ data class Receipt(
                 paymentMethod = tx.paymentMethod.uppercase(),
                 totalAmount = tx.totalAmount.toLong(),
                 isReprint = isReprint,
+                footer = "Terima kasih!"
+            )
+        }
+
+        fun fromSummary(summary: DaySummary, dateRangeLabel: String, printTime: String): Receipt {
+            return Receipt(
+                type = ReceiptType.ES_TEH_RECAP,
+                storeName = "Es Teh Evren",
+                subtitle = "REKAP PENJUALAN",
+                dateRangeLabel = dateRangeLabel,
+                timeString = printTime,
+                summary = summary,
+                totalQty = summary.totalCups,
+                totalAmount = summary.totalRevenue.toLong(),
                 footer = "Terima kasih!"
             )
         }

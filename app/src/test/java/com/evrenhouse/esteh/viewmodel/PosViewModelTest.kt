@@ -7,6 +7,7 @@ import com.evrenhouse.esteh.data.SettingsRepository
 import com.evrenhouse.esteh.data.printer.PrinterDevice
 import com.evrenhouse.esteh.data.printer.PrinterRepository
 import com.evrenhouse.esteh.data.printer.Receipt
+import com.evrenhouse.esteh.data.printer.ReceiptType
 import com.evrenhouse.esteh.data.remote.dto.DaySummary
 import com.evrenhouse.esteh.data.remote.dto.PayStats
 import com.evrenhouse.esteh.data.remote.dto.Settings
@@ -39,8 +40,8 @@ class PosViewModelTest {
         var checkoutHandler: suspend (Transaction) -> CheckoutResult = { CheckoutResult.Synced(it) }
         var checkoutCalls = 0
         var synced = 0
-        override suspend fun getSummary() = Result.success(summary)
-        override suspend fun getToday() = Result.success(txns)
+        override suspend fun getSummary(from: String?, to: String?, date: String?) = Result.success(summary)
+        override suspend fun getToday(from: String?, to: String?, date: String?) = Result.success(txns)
         override suspend fun checkout(tx: Transaction): CheckoutResult {
             checkoutCalls++
             return checkoutHandler(tx)
@@ -405,5 +406,57 @@ class PosViewModelTest {
         assertEquals(Sheet.RECEIPT, v.state.value.sheet)
         assertNotNull(v.state.value.receipt)
         assertTrue(v.state.value.snackbar?.text?.contains("gagal cetak struk") == true)
+    }
+
+    @Test
+    fun `setRecapDatePreset updates date range and reloads`() = runTest {
+        val (v, _, _) = vm()
+        advanceUntilIdle()
+        v.setRecapDatePreset(RecapDatePreset.YESTERDAY)
+        advanceUntilIdle()
+        assertEquals(RecapDatePreset.YESTERDAY, v.state.value.recapDateRange.preset)
+        assertEquals("Kemarin", v.state.value.recapDateRange.label)
+
+        v.setRecapDatePreset(RecapDatePreset.LAST_7_DAYS)
+        advanceUntilIdle()
+        assertEquals(RecapDatePreset.LAST_7_DAYS, v.state.value.recapDateRange.preset)
+        assertEquals("7 Hari Terakhir", v.state.value.recapDateRange.label)
+
+        v.setRecapDatePreset(RecapDatePreset.CUSTOM, "2026-10-01", "2026-10-10", "1 - 10 Okt")
+        advanceUntilIdle()
+        assertEquals(RecapDatePreset.CUSTOM, v.state.value.recapDateRange.preset)
+        assertEquals("1 - 10 Okt", v.state.value.recapDateRange.label)
+        assertEquals("2026-10-01", v.state.value.recapDateRange.from)
+        assertEquals("2026-10-10", v.state.value.recapDateRange.to)
+    }
+
+    @Test
+    fun `viewTransactionDetail sets receipt and opens RECEIPT sheet`() = runTest {
+        val (v, _, _) = vm()
+        advanceUntilIdle()
+        val tx = Transaction("TRX-001", "2026-10-16T10:00:00Z", "2026-10-16", "10:00", "Jumat", emptyList(), 1, 10000, "cash")
+        v.viewTransactionDetail(tx)
+        assertEquals(tx, v.state.value.receipt)
+        assertEquals(Sheet.RECEIPT, v.state.value.sheet)
+    }
+
+    @Test
+    fun `printRecapReceipt prints summary`() = runTest {
+        val printer = FakePrinter()
+        val pos = FakePos()
+        pos.summary = DaySummary(10, 100000, 10, emptyMap(), PayStats(5, 50000), PayStats(5, 50000))
+        val (v, _, _) = vm(pos = pos, printer = printer)
+        advanceUntilIdle()
+        v.selectPrinter(PrinterDevice("RP02N", "00:11:22:33:44:55"))
+        advanceUntilIdle()
+        v.openRecap()
+        advanceUntilIdle()
+
+        v.printRecapReceipt()
+        advanceUntilIdle()
+        assertEquals(1, printer.printCalls)
+        assertEquals("Es Teh Evren", printer.lastPrintedReceipt?.storeName)
+        assertEquals(ReceiptType.ES_TEH_RECAP, printer.lastPrintedReceipt?.type)
+        assertEquals("Struk rekap berhasil dicetak", v.state.value.snackbar?.text)
     }
 }

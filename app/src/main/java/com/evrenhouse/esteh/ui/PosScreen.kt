@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.evrenhouse.esteh.data.printer.PrinterDevice
+import com.evrenhouse.esteh.data.RecapCsvExporter
 import com.evrenhouse.esteh.data.remote.dto.Transaction
+import com.evrenhouse.esteh.viewmodel.RecapDatePreset
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -119,6 +121,20 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
         onToggleReceipt = vm::setShowReceipt,
         onPrint = { vm.printReceipt() },
         onReprint = { tx -> vm.printReceipt(tx, isReprint = true) },
+        onSelectRecapPreset = { preset, from, to, label ->
+            vm.setRecapDatePreset(preset, from, to, label)
+        },
+        onPrintRecap = vm::printRecapReceipt,
+        onExportCsv = {
+            val shareIntent = RecapCsvExporter.shareCsv(
+                context,
+                state.filteredTxns,
+                state.summary,
+                state.recapDateRange.label
+            )
+            context.startActivity(shareIntent)
+        },
+        onSelectTxn = vm::viewTransactionDetail,
         onSelectPrinter = vm::selectPrinter,
         onToggleAutoPrint = vm::setAutoPrint,
         onRefreshPrinters = checkAndRequestBluetooth,
@@ -151,6 +167,10 @@ fun PosScreenContent(
     onToggleReceipt: (Boolean) -> Unit,
     onPrint: () -> Unit,
     onReprint: (Transaction) -> Unit = {},
+    onSelectRecapPreset: (RecapDatePreset, String?, String?, String?) -> Unit = { _, _, _, _ -> },
+    onPrintRecap: () -> Unit = {},
+    onExportCsv: () -> Unit = {},
+    onSelectTxn: (Transaction) -> Unit = {},
     onSelectPrinter: (PrinterDevice?) -> Unit = {},
     onToggleAutoPrint: (Boolean) -> Unit = {},
     onRefreshPrinters: () -> Unit = {},
@@ -226,8 +246,13 @@ fun PosScreenContent(
                                 summary = state.summary,
                                 txns = state.filteredTxns,
                                 filter = state.recapFilter,
+                                dateRange = state.recapDateRange,
                                 isLoading = state.isLoadingRecap,
                                 onFilter = onFilter,
+                                onSelectPreset = onSelectRecapPreset,
+                                onPrintRecap = onPrintRecap,
+                                onExportCsv = onExportCsv,
+                                onSelectTxn = onSelectTxn,
                                 onReprint = onReprint,
                             )
                         }
@@ -247,8 +272,13 @@ fun PosScreenContent(
                                         summary = state.summary,
                                         txns = state.filteredTxns,
                                         filter = state.recapFilter,
+                                        dateRange = state.recapDateRange,
                                         isLoading = state.isLoadingRecap,
                                         onFilter = onFilter,
+                                        onSelectPreset = onSelectRecapPreset,
+                                        onPrintRecap = onPrintRecap,
+                                        onExportCsv = onExportCsv,
+                                        onSelectTxn = onSelectTxn,
                                         onReprint = onReprint,
                                     )
                                 }

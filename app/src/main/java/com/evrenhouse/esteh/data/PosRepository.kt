@@ -28,8 +28,8 @@ sealed interface CheckoutResult {
 }
 
 interface PosRepository {
-    suspend fun getSummary(): Result<DaySummary>
-    suspend fun getToday(): Result<List<Transaction>>
+    suspend fun getSummary(from: String? = null, to: String? = null, date: String? = null): Result<DaySummary>
+    suspend fun getToday(from: String? = null, to: String? = null, date: String? = null): Result<List<Transaction>>
     suspend fun checkout(tx: Transaction): CheckoutResult
     /** Dorong antrean pending; kembalikan jumlah yang berhasil. Berhenti saat offline. */
     suspend fun syncPending(): Int
@@ -56,12 +56,12 @@ class PosRepositoryImpl(
     private val flightMutex = Mutex()
     private val inflight = mutableMapOf<String, Deferred<SyncRowResult>>()
 
-    override suspend fun getSummary(): Result<DaySummary> = withContext(io) {
-        runCatching { api.getSummary().summary }
+    override suspend fun getSummary(from: String?, to: String?, date: String?): Result<DaySummary> = withContext(io) {
+        runCatching { api.getSummary(from = from, to = to, date = date).summary }
     }
 
-    override suspend fun getToday(): Result<List<Transaction>> = withContext(io) {
-        runCatching { api.getToday().transactions }
+    override suspend fun getToday(from: String?, to: String?, date: String?): Result<List<Transaction>> = withContext(io) {
+        runCatching { api.getToday(from = from, to = to, date = date).transactions }
     }
 
     override suspend fun checkout(tx: Transaction): CheckoutResult {
