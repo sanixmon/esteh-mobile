@@ -55,16 +55,23 @@ fun RecapContent(
                     modifier = Modifier.padding(vertical = 16.dp),
                 )
             } else {
-                Text(
-                    text = summary.totalRevenue.toRp(),
-                    style = MaterialTheme.typography.displaySmall,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Text(
-                    text = "${summary.totalTransactions} Transaksi • ${summary.totalCups} Cup",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                MicroLabel("Pendapatan hari ini")
+                EstehBezel(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = summary.totalRevenue.toRp(),
+                            style = MaterialTheme.typography.displaySmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = "${summary.totalTransactions} TRANSAKSI • ${summary.totalCups} CUP",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val extra = LocalEstehExtraColors.current

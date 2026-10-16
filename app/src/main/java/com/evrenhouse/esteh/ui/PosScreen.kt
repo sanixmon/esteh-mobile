@@ -234,9 +234,10 @@ private fun Header(vm: PosViewModel, clockVm: ClockViewModel, modifier: Modifier
     Column(modifier = modifier.padding(vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
+                MicroLabel("Kasir")
                 Text(
                     text = "Es Teh Evren",
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 ClockOf(clockVm)
@@ -272,15 +273,17 @@ private fun OfflinePill() {
 @Composable
 private fun MenuPane(vm: PosViewModel, modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         MicroLabel("Katalog")
-        menuCatalog(state.prices).forEach { (def, price) ->
-            MenuCard(
-                name = def.name,
-                price = price,
-                imageUrl = assetUrl(BuildConfig.API_BASE_URL, def.asset),
-                onTap = { vm.addItem(def.menuId) },
-            )
+        menuCatalog(state.prices).forEachIndexed { i, (def, price) ->
+            StaggerIn(i) {
+                MenuCard(
+                    name = def.name,
+                    price = price,
+                    imageUrl = assetUrl(BuildConfig.API_BASE_URL, def.asset),
+                    onTap = { vm.addItem(def.menuId) },
+                )
+            }
         }
         Spacer(modifier = Modifier.height(4.dp))
     }

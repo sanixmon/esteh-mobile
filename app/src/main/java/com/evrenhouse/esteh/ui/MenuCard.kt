@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,7 +25,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.evrenhouse.esteh.EstehApp
 
-/** Kartu menu: foto web + nama + pil harga mono. Tap = tambah (§2.1–2.2). */
+/** Kartu menu bezel-ganda: foto web + nama + harga mono + pulau "+". */
 @Composable
 fun MenuCard(
     name: String,
@@ -38,14 +36,9 @@ fun MenuCard(
 ) {
     val context = LocalContext.current
     val loader = (context.applicationContext as EstehApp).container.imageLoader
-    Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onTap),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        shape = MaterialTheme.shapes.large,
-    ) {
+    EstehBezel(modifier = modifier.fillMaxWidth().clickable(onClick = onTap)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -54,19 +47,19 @@ fun MenuCard(
                 imageLoader = loader,
                 contentDescription = name,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(72.dp).clip(MaterialTheme.shapes.medium)
+                modifier = Modifier.size(76.dp).clip(MaterialTheme.shapes.medium)
                     .background(MaterialTheme.colorScheme.surfaceContainerLow),
             )
             Column(modifier = Modifier.weight(1f)) {
                 MicroLabel("Menu")
                 Text(
                     text = name,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
                     text = price.toRp(),
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.bodyLarge,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -74,11 +67,13 @@ fun MenuCard(
             Box(
                 modifier = Modifier.clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(14.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = "+",
                     style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             }

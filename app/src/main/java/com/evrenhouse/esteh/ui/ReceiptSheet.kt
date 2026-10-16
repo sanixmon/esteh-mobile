@@ -32,9 +32,11 @@ fun ReceiptContent(
     onNew: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-        Text(
-            text = "Es Teh Evren",
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+        EstehBezel(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
+                Text(
+                    text = "Es Teh Evren",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -82,6 +84,8 @@ fun ReceiptContent(
             Button(onClick = onNew, modifier = Modifier.weight(1f)) { Text("Transaksi Baru") }
         }
         Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
     }
 }
 
