@@ -123,4 +123,19 @@ class SettingsRepositoryTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `showReceipt defaults true and toggles`() = runTest {
+        val dir = tmp.root
+        try {
+            val (r, _, _) = repo(FakeApiService(), dir)
+            assertEquals(true, r.showReceiptFlow.first())
+            r.setShowReceipt(false)
+            assertEquals(false, r.showReceiptFlow.first())
+            r.setShowReceipt(true)
+            assertEquals(true, r.showReceiptFlow.first())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }

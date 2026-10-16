@@ -48,11 +48,14 @@ class PosViewModelTest {
     class FakeSettings(
         prices: Settings = Settings.DEFAULT,
         lastPayment: String? = null,
+        showReceipt: Boolean = true,
     ) : SettingsRepository {
         val pricesState = MutableStateFlow(prices)
         val lastPaymentState = MutableStateFlow(lastPayment)
+        val showReceiptState = MutableStateFlow(showReceipt)
         override val pricesFlow = pricesState
         override val lastPaymentFlow = lastPaymentState
+        override val showReceiptFlow = showReceiptState
         var saveCalls = 0
         var saveResult: SavePricesResult = SavePricesResult.Saved
         override suspend fun refreshFromBackend() {}
@@ -63,6 +66,7 @@ class PosViewModelTest {
             return saveResult
         }
         override suspend fun setLastPayment(method: String) { lastPaymentState.value = method }
+        override suspend fun setShowReceipt(show: Boolean) { showReceiptState.value = show }
     }
 
     @Before
@@ -230,5 +234,38 @@ class PosViewModelTest {
         v.changeQty("es-teh", -1)
         assertTrue(v.state.value.cart.isEmpty())
         assertEquals("Es Teh dihapus", v.state.value.snackbar)
+    }
+
+    @Test
+    fun `receipt hidden when toggle off`() = runTest {
+        val (v, pos, _) = vm(settings = FakeSettings(showReceipt = false))
+        advanceUntilIdle()
+        v.setPayment(Transaction.CASH)
+        v.addItem("es-teh")
+        advanceUntilIdle()
+        v.checkout()
+        advanceUntilIdle()
+        assertEquals(1, pos.checkoutCalls)
+        assertNotNull(v.state.value.receipt)
+        assertEquals(Sheet.NONE, v.state.value.sheet)
+    }
+
+    @Test
+    fun `toggle receipt updates state`() = runTest {
+        val settings = FakeSettings(showReceipt = true)
+        val (v, _, _) = vm(settings = settings)
+        advanceUntilIdle()
+        assertEquals(true, v.state.value.showReceipt)
+        v.setShowReceipt(false)
+        advanceUntilIdle()
+        assertEquals(false, v.state.value.showReceipt)
+    }
+
+    @Test
+    fun `print placeholder snackbars`() = runTest {
+        val (v, _, _) = vm()
+        advanceUntilIdle()
+        v.printReceipt()
+        assertEquals("Printer Bluetooth belum disiapkan", v.state.value.snackbar)
     }
 }

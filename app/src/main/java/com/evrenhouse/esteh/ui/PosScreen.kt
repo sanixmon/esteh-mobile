@@ -67,11 +67,12 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
         }
     }
 
-    // Struk ditunda: anggap "Transaksi Baru" langsung setelah sukses.
+    // Struk opsional: hanya reset diam-diam bila struk dimatikan.
     val receipt = state.receipt
     val offline = state.offline
-    LaunchedEffect(receipt, offline) {
-        if (receipt != null) {
+    val showReceipt = state.showReceipt
+    LaunchedEffect(receipt, offline, showReceipt) {
+        if (receipt != null && (state.sheet != Sheet.RECEIPT || !showReceipt)) {
             if (!offline) snack.showSnackbar("Transaksi ${receipt.id} tersimpan")
             vm.newTransaction()
         }
@@ -182,10 +183,48 @@ fun PosScreen(vm: PosViewModel, clockVm: ClockViewModel) {
                 }
                 Sheet.SETTINGS -> SettingsDialog(
                     current = state.prices,
+                    showReceipt = state.showReceipt,
+                    onToggleReceipt = vm::setShowReceipt,
                     onDismiss = vm::closeSheet,
                     onSave = vm::savePrices,
                 )
-                Sheet.NONE, Sheet.RECEIPT -> Unit // RECEIPT: struk ditunda (langsung reset)
+                Sheet.RECEIPT -> {
+                    val tx = state.receipt
+                    if (tx != null) {
+                        if (tablet) {
+                            Dialog(
+                                onDismissRequest = vm::newTransaction,
+                                properties = DialogProperties(usePlatformDefaultWidth = false),
+                            ) {
+                                Surface(
+                                    tonalElevation = 3.dp,
+                                    shape = MaterialTheme.shapes.medium,
+                                    modifier = Modifier.width(480.dp).heightIn(max = 600.dp),
+                                ) {
+                                    Column(modifier = Modifier.padding(vertical = 16.dp)) {
+                                        ReceiptContent(
+                                            tx = tx,
+                                            onPrint = vm::printReceipt,
+                                            onNew = vm::newTransaction,
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            ModalBottomSheet(
+                                onDismissRequest = vm::newTransaction,
+                                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                            ) {
+                                ReceiptContent(
+                                    tx = tx,
+                                    onPrint = vm::printReceipt,
+                                    onNew = vm::newTransaction,
+                                )
+                            }
+                        }
+                    }
+                }
+                Sheet.NONE -> Unit
             }
         }
     }

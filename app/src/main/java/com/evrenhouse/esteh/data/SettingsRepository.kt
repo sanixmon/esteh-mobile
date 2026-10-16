@@ -3,6 +3,7 @@ package com.evrenhouse.esteh.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.evrenhouse.esteh.data.local.SettingEntity
@@ -26,9 +27,11 @@ sealed interface SavePricesResult {
 interface SettingsRepository {
     val pricesFlow: Flow<Settings>
     val lastPaymentFlow: Flow<String?>
+    val showReceiptFlow: Flow<Boolean>
     suspend fun refreshFromBackend()
     suspend fun savePrices(settings: Settings): SavePricesResult
     suspend fun setLastPayment(method: String)
+    suspend fun setShowReceipt(show: Boolean)
 }
 
 /**
@@ -50,6 +53,8 @@ class SettingsRepositoryImpl(
     }
 
     override val lastPaymentFlow: Flow<String?> = store.data.map { it[LAST_PAYMENT] }
+
+    override val showReceiptFlow: Flow<Boolean> = store.data.map { it[SHOW_RECEIPT] ?: true }
 
     override suspend fun refreshFromBackend() = withContext(io) {
         try {
@@ -75,6 +80,10 @@ class SettingsRepositoryImpl(
         store.edit { it[LAST_PAYMENT] = method }
     }
 
+    override suspend fun setShowReceipt(show: Boolean) {
+        store.edit { it[SHOW_RECEIPT] = show }
+    }
+
     private suspend fun saveLocal(s: Settings) {
         store.edit {
             it[ES_TEH] = s.esTeh
@@ -87,6 +96,7 @@ class SettingsRepositoryImpl(
         val ES_TEH = intPreferencesKey("prices_es_teh")
         val LEMON_TEA = intPreferencesKey("prices_lemon_tea")
         val LAST_PAYMENT = stringPreferencesKey("last_payment")
+        val SHOW_RECEIPT = booleanPreferencesKey("show_receipt")
         const val PRICES_KV = "prices"
     }
 }

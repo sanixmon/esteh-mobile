@@ -49,6 +49,7 @@ data class UiState(
     val recapFilter: RecapFilter = RecapFilter.ALL,
     val sheet: Sheet = Sheet.NONE,
     val receipt: Transaction? = null,
+    val showReceipt: Boolean = true,
     val snackbar: String? = null,
     val isCompleting: Boolean = false,
     val isLoadingRecap: Boolean = false,
@@ -76,8 +77,12 @@ class PosViewModel(
 
     init {
         viewModelScope.launch {
-            combine(settings.pricesFlow, settings.lastPaymentFlow) { p, lp -> p to lp }
-                .collect { (p, _) -> _state.update { it.copy(prices = p) } }
+            combine(
+                settings.pricesFlow,
+                settings.lastPaymentFlow,
+                settings.showReceiptFlow,
+            ) { p, _, show -> p to show }
+                .collect { (p, show) -> _state.update { it.copy(prices = p, showReceipt = show) } }
         }
         refreshAll()
     }
@@ -158,11 +163,16 @@ class PosViewModel(
             )
             when (val r = pos.checkout(tx)) {
                 is CheckoutResult.Synced -> _state.update {
-                    it.copy(isCompleting = false, receipt = r.transaction, sheet = Sheet.RECEIPT, offline = false)
+                    it.copy(
+                        isCompleting = false, receipt = r.transaction,
+                        sheet = if (it.showReceipt) Sheet.RECEIPT else Sheet.NONE,
+                        offline = false,
+                    )
                 }
                 is CheckoutResult.SavedOffline -> _state.update {
                     it.copy(
-                        isCompleting = false, receipt = r.transaction, sheet = Sheet.RECEIPT,
+                        isCompleting = false, receipt = r.transaction,
+                        sheet = if (it.showReceipt) Sheet.RECEIPT else Sheet.NONE,
                         offline = true, snackbar = "Offline — tersimpan lokal",
                     )
                 }
@@ -212,6 +222,15 @@ class PosViewModel(
                 }
             }
         }
+    }
+
+    fun setShowReceipt(show: Boolean) {
+        viewModelScope.launch { settings.setShowReceipt(show) }
+    }
+
+    /** Tombol Cetak di struk — printer Bluetooth (§9) menyusul. */
+    fun printReceipt() {
+        _state.update { it.copy(snackbar = "Printer Bluetooth belum disiapkan") }
     }
 
     fun dismissSnackbar() {
