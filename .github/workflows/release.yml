@@ -64,10 +64,15 @@ jobs:
         run: chmod +x gradlew
 
       - name: Restore release keystore
-        if: ${{ secrets.ESTEH_KEYSTORE_BASE64 != '' }}
+        env:
+          ESTEH_KEYSTORE_BASE64: ${{ secrets.ESTEH_KEYSTORE_BASE64 }}
         run: |
+          if [ -z "$ESTEH_KEYSTORE_BASE64" ]; then
+            echo "No ESTEH_KEYSTORE_BASE64 secret; skipping keystore restore."
+            exit 0
+          fi
           mkdir -p app/keystore
-          echo "${{ secrets.ESTEH_KEYSTORE_BASE64 }}" | base64 -d > app/keystore/release.jks
+          echo "$ESTEH_KEYSTORE_BASE64" | base64 -d > app/keystore/release.jks
 
       - name: Run unit tests
         run: ./gradlew testReleaseUnitTest -PversionName="${{ steps.vars.outputs.version }}" --no-daemon
